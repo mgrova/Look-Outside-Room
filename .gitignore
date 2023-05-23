@@ -1,2 +1,5 @@
 experiments
-pretrained_models
+evaluation/pretrained_models
+.idea
+.vscode
+__pycache__/

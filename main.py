@@ -190,7 +190,7 @@ for idx in pbar:
         pbar.set_description((f"loss: {loss:.4f};"))
 
         if idx % args.ckpt_iter == 0:
-            torch.save(module.state_dict(), os.path.join(save_dir, "last.ckpt"))
+            torch.save(module.state_dict(), os.path.join(save_dir, "evaluation/pretrained_models/matterport/last.ckpt"))
 
     if idx % args.visual_iter == 0:
         if get_rank() == 0:
