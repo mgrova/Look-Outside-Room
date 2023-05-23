@@ -27,9 +27,9 @@ parser.add_argument("--base", type=str, default="mp3d_16x16_sine_cview_adaptive"
 parser.add_argument("--exp", type=str, default="try_1",
                     help="experiments name")
 parser.add_argument("--input_image_path", type=str, default="../configs/custom/sample_data/6.png")
-parser.add_argument("--input_poses_path", type=str, default="../configs/custom/transforms.json")
+parser.add_argument("--input_poses_path", type=str, default="../configs/custom/transforms_simple_forward.json")
 parser.add_argument('--gpu', default='0', type=str)
-parser.add_argument("--video_limit", type=int, default=5, help="# of video to test")
+parser.add_argument("--video_limit", type=int, default=20, help="# of video to test")
 parser.add_argument("--seed", type=int, default=2333, help="")
 
 args = parser.parse_args()
@@ -47,8 +47,201 @@ config_path = "../configs/mp3d/%s.yaml" % args.base
 cpt_path = "./pretrained_models/matterport/last.ckpt"
 
 
+def _axis_angle_rotation(axis: str, angle: torch.Tensor) -> torch.Tensor:
+    """
+    Return the rotation matrices for one of the rotations about an axis
+    of which Euler angles describe, for each value of the angle given.
+
+    Args:
+        axis: Axis label "X" or "Y or "Z".
+        angle: any shape tensor of Euler angles in radians
+
+    Returns:
+        Rotation matrices as tensor of shape (..., 3, 3).
+    """
+
+    cos = torch.cos(angle)
+    sin = torch.sin(angle)
+    one = torch.ones_like(angle)
+    zero = torch.zeros_like(angle)
+
+    if axis == "X":
+        R_flat = (one, zero, zero, zero, cos, -sin, zero, sin, cos)
+    elif axis == "Y":
+        R_flat = (cos, zero, sin, zero, one, zero, -sin, zero, cos)
+    elif axis == "Z":
+        R_flat = (cos, -sin, zero, sin, cos, zero, zero, zero, one)
+    else:
+        raise ValueError("letter must be either X, Y or Z.")
+
+    return torch.stack(R_flat, -1).reshape(angle.shape + (3, 3))
+
+
+def euler_angles_to_matrix(euler_angles: torch.Tensor, convention: str) -> torch.Tensor:
+    """
+    Convert rotations given as Euler angles in radians to rotation matrices.
+
+    Args:
+        euler_angles: Euler angles in radians as tensor of shape (..., 3).
+        convention: Convention string of three uppercase letters from
+            {"X", "Y", and "Z"}.
+
+    Returns:
+        Rotation matrices as tensor of shape (..., 3, 3).
+    """
+    if euler_angles.dim() == 0 or euler_angles.shape[-1] != 3:
+        raise ValueError("Invalid input euler angles.")
+    if len(convention) != 3:
+        raise ValueError("Convention must have 3 letters.")
+    if convention[1] in (convention[0], convention[2]):
+        raise ValueError(f"Invalid convention {convention}.")
+    for letter in convention:
+        if letter not in ("X", "Y", "Z"):
+            raise ValueError(f"Invalid letter {letter} in convention string.")
+    matrices = [
+        _axis_angle_rotation(c, e)
+        for c, e in zip(convention, torch.unbind(euler_angles, -1))
+    ]
+    # return functools.reduce(torch.matmul, matrices)
+    return torch.matmul(torch.matmul(matrices[0], matrices[1]), matrices[2])
+
+
+def _angle_from_tan(
+    axis: str, other_axis: str, data, horizontal: bool, tait_bryan: bool
+) -> torch.Tensor:
+    """
+    Extract the first or third Euler angle from the two members of
+    the matrix which are positive constant times its sine and cosine.
+
+    Args:
+        axis: Axis label "X" or "Y or "Z" for the angle we are finding.
+        other_axis: Axis label "X" or "Y or "Z" for the middle axis in the
+            convention.
+        data: Rotation matrices as tensor of shape (..., 3, 3).
+        horizontal: Whether we are looking for the angle for the third axis,
+            which means the relevant entries are in the same row of the
+            rotation matrix. If not, they are in the same column.
+        tait_bryan: Whether the first and third axes in the convention differ.
+
+    Returns:
+        Euler Angles in radians for each matrix in data as a tensor
+        of shape (...).
+    """
+
+    i1, i2 = {"X": (2, 1), "Y": (0, 2), "Z": (1, 0)}[axis]
+    if horizontal:
+        i2, i1 = i1, i2
+    even = (axis + other_axis) in ["XY", "YZ", "ZX"]
+    if horizontal == even:
+        return torch.atan2(data[..., i1], data[..., i2])
+    if tait_bryan:
+        return torch.atan2(-data[..., i2], data[..., i1])
+    return torch.atan2(data[..., i2], -data[..., i1])
+
+
+def _index_from_letter(letter: str) -> int:
+    if letter == "X":
+        return 0
+    if letter == "Y":
+        return 1
+    if letter == "Z":
+        return 2
+    raise ValueError("letter must be either X, Y or Z.")
+
+def matrix_to_euler_angles(matrix: torch.Tensor, convention: str) -> torch.Tensor:
+    """
+    Convert rotations given as rotation matrices to Euler angles in radians.
+
+    Args:
+        matrix: Rotation matrices as tensor of shape (..., 3, 3).
+        convention: Convention string of three uppercase letters.
+
+    Returns:
+        Euler angles in radians as tensor of shape (..., 3).
+    """
+    if len(convention) != 3:
+        raise ValueError("Convention must have 3 letters.")
+    if convention[1] in (convention[0], convention[2]):
+        raise ValueError(f"Invalid convention {convention}.")
+    for letter in convention:
+        if letter not in ("X", "Y", "Z"):
+            raise ValueError(f"Invalid letter {letter} in convention string.")
+    if matrix.size(-1) != 3 or matrix.size(-2) != 3:
+        raise ValueError(f"Invalid rotation matrix shape {matrix.shape}.")
+    i0 = _index_from_letter(convention[0])
+    i2 = _index_from_letter(convention[2])
+    tait_bryan = i0 != i2
+    if tait_bryan:
+        central_angle = torch.asin(
+            matrix[..., i0, i2] * (-1.0 if i0 - i2 in [-1, 2] else 1.0)
+        )
+    else:
+        central_angle = torch.acos(matrix[..., i0, i0])
+
+    o = (
+        _angle_from_tan(
+            convention[0], convention[1], matrix[..., i2], False, tait_bryan
+        ),
+        central_angle,
+        _angle_from_tan(
+            convention[2], convention[1], matrix[..., i0, :], True, tait_bryan
+        ),
+    )
+    return torch.stack(o, -1)
+
+
+def convert_pose_from_nerf_convention(cam_to_world: torch.Tensor) -> torch.Tensor:
+    """
+    Converts a cam_to_world matrix in the original nerf convention (e.g. as in nerf_synthetic dataset) to a world_to_cam matrix in pytorch3d convention.
+
+    We have camera orientation as in OpenGL/Blender which is:
+    +X is right, +Y is up, and +Z is pointing back and away from the camera. -Z is the look-at direction.
+    World Space also has a specific convetion which is:
+    Our world space is oriented such that the up vector is +Z. The XY plane is parallel to the ground plane.
+    See here for details: https://docs.nerf.studio/en/latest/quickstart/data_conventions.html
+
+    We need pytorch3d convention which is:
+    +X is left, +Y is up, and +Z is pointing front. +Z is the look-at direction.
+    See here for details: https://pytorch3d.org/docs/cameras
+
+    :param cam_to_world: [4,4] torch.Tensor or [3,4] torch.Tensor
+    :return: world_to_cam: [4,4] torch.Tensor
+    """
+    cam_to_world = cam_to_world.clone()
+
+    if cam_to_world.shape[0] == 3:
+        cam_to_world = torch.cat([
+            cam_to_world,
+            torch.tensor([[0, 0, 0, 1]]).to(cam_to_world)
+        ], dim=0)
+
+    # zxy --> xyz
+    zxy_to_xyz = torch.tensor([
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [1, 0, 0, 0],
+        [0, 0, 0, 1]
+    ]).to(cam_to_world)
+    cam_to_world = zxy_to_xyz @ cam_to_world
+
+    # have cam_to_world, need world_to_cam
+    world_to_cam = cam_to_world.inverse()
+
+    # change translation, XZ translation must be flipped
+    world_to_cam[0, 3] = -world_to_cam[0, 3]
+    world_to_cam[2, 3] = -world_to_cam[2, 3]
+
+    # change rotation, XZ rotation must be flipped
+    angles = matrix_to_euler_angles(world_to_cam[:3, :3], "XYZ")
+    angles[0] = -angles[0]
+    angles[2] = -angles[2]
+    world_to_cam[:3, :3] = euler_angles_to_matrix(angles, "XYZ")
+
+    return world_to_cam
+
+
 # load custom data
-def load_poses(pose_file_path):
+def load_poses(pose_file_path, convert_from_nerf=True):
     with open(pose_file_path, "r") as f:
         poses = json.load(f)
         if 'frames' in poses:
@@ -56,6 +249,10 @@ def load_poses(pose_file_path):
             poses = [torch.from_numpy(np.array(p['transform_matrix'])).cuda().float() for p in poses]
         else:
             poses = [torch.from_numpy(np.array(p)).cuda().float() for i, p in poses.items()]
+
+        if convert_from_nerf:
+            poses = [convert_pose_from_nerf_convention(p) for p in poses]
+
         return poses
 
 
@@ -99,7 +296,7 @@ def load_intrinsics(transforms_file_path, H, W, K):
         return K
 
 
-poses = load_poses(args.input_poses_path)
+poses = load_poses(args.input_poses_path, convert_from_nerf=True)
 start_image = torch.from_numpy(np.array(Image.open(args.input_image_path).resize((256, 256)))).cuda()[None]
 K = load_intrinsics(args.input_poses_path, 256, 256, torch.eye(3)).cuda()[None, :3, :3]
 K_inv = K.inverse()
@@ -112,7 +309,7 @@ transform = transforms.Compose([
 start_image = transform(start_image).permute(1, 0, 2, 3)
 
 # create out dir
-target_save_path = "./experiments/custom/%s/evaluate_frame_%s_poses_%d_len_%d/" % (args.exp, os.path.basename(args.input_image_path), len(poses), args.video_limit)
+target_save_path = "./experiments/custom/%s/evaluate_transforms_%s_frame_%s_poses_%d_len_%d/" % (args.exp, os.path.basename(args.input_poses_path), os.path.basename(args.input_image_path), len(poses), args.video_limit)
 os.makedirs(target_save_path, exist_ok=True)
 
 
@@ -301,5 +498,7 @@ with open(args.input_poses_path, "r") as f:
         cv2.imwrite(os.path.join(target_save_path, "predict_%02d.png" % i), forecast_img[:, :, [2, 1, 0]])
 
         nerf_img = img_pil.resize((transforms['w'], transforms['h']))
-        out_file_name = os.path.join(target_save_path, os.path.basename(transforms['frames'][i]['file_path']) + ".png")
+        out_file_name = os.path.join(target_save_path, os.path.basename(transforms['frames'][i]['file_path']))
+        if not out_file_name.endswith(".png"):
+            out_file_name += ".png"
         nerf_img.save(out_file_name)
