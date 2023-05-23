@@ -29,6 +29,7 @@ parser.add_argument("--exp", type=str, default="try_1",
 parser.add_argument("--input_image_path", type=str, default="../configs/custom/sample_data/0.png")
 parser.add_argument("--input_poses_path", type=str, default="../configs/custom/transforms.json")
 parser.add_argument('--gpu', default='0', type=str)
+parser.add_argument("--video_limit", type=int, default=10, help="# of video to test")
 parser.add_argument("--seed", type=int, default=2333, help="")
 
 args = parser.parse_args()
@@ -101,6 +102,7 @@ def load_intrinsics(transforms_file_path, H, W, K):
 poses = load_poses(args.input_poses_path)
 start_image = torch.from_numpy(np.array(Image.open(args.input_image_path).resize((256, 256)))).cuda()[None]
 K = load_intrinsics(args.input_poses_path, 256, 256, torch.eye(3)).cuda()[None, :3, :3]
+K_inv = K.inverse()
 
 transform = transforms.Compose([
     ToTensorVideo(),
@@ -110,7 +112,7 @@ transform = transforms.Compose([
 start_image = transform(start_image).permute(1, 0, 2, 3)
 
 # create out dir
-target_save_path = "./experiments/custom/%s/evaluate_frame_%s_len_%d/" % (args.exp, os.path.basename(args.input_image_path), len(poses))
+target_save_path = "./experiments/custom/%s/evaluate_frame_%s_poses_%d_len_%d/" % (args.exp, os.path.basename(args.input_image_path), len(poses), args.video_limit)
 os.makedirs(target_save_path, exist_ok=True)
 
 
@@ -154,7 +156,7 @@ def as_png(x):
     x = x.clip(0, 255).astype(np.uint8)
     return Image.fromarray(x)
 
-def evaluate_per_batch(temp_model, start_image, poses, show=False):
+def evaluate_per_batch(temp_model, start_image, poses, show=False, total_time_len=20):
     video_clips = []
     video_clips.append(start_image)
 
@@ -168,7 +170,7 @@ def evaluate_per_batch(temp_model, start_image, poses, show=False):
         # create dict
         example = dict()
         example["K"] = K
-        example["K_inv"] = K.inverse()
+        example["K_inv"] = K_inv
 
         example["src_img"] = video_clips[-1]
         _, c_indices = temp_model.encode_to_c(example["src_img"])
@@ -208,27 +210,28 @@ def evaluate_per_batch(temp_model, start_image, poses, show=False):
             plt.show()
 
     # then generate second
+    N = min(total_time_len, len(poses))
     with torch.no_grad():
-        for i in range(0, total_time_len - 2, time_len):
+        for i in tqdm(range(0, N - 2, 1)):
             conditions = []
 
-            R_src = batch["R_s"][0, i, ...]
+            R_src = poses[i][:3, :3]
             R_src_inv = R_src.transpose(-1, -2)
-            t_src = batch["t_s"][0, i, ...]
+            t_src = poses[i][:3, 3]
 
             # create dict
             example = dict()
-            example["K"] = batch["K"]
-            example["K_inv"] = batch["K_inv"]
+            example["K"] = K
+            example["K_inv"] = K_inv
 
-            for t in range(time_len):
+            for t in range(1):
                 example["src_img"] = video_clips[-2]
                 _, c_indices = temp_model.encode_to_c(example["src_img"])
                 c_emb = temp_model.transformer.tok_emb(c_indices)
                 conditions.append(c_emb)
 
-                R_dst = batch["R_s"][0, i + t + 1, ...]
-                t_dst = batch["t_s"][0, i + t + 1, ...]
+                R_dst = poses[i + t + 1][:3, :3]
+                t_dst = poses[i + t + 1][:3, 3]
 
                 R_rel = R_dst @ R_src_inv
                 t_rel = t_dst - R_rel @ t_src
@@ -245,8 +248,8 @@ def evaluate_per_batch(temp_model, start_image, poses, show=False):
                 c_emb = temp_model.transformer.tok_emb(c_indices)
                 conditions.append(c_emb)
 
-                R_dst = batch["R_s"][0, i + t + 2, ...]
-                t_dst = batch["t_s"][0, i + t + 2, ...]
+                R_dst = poses[i + t + 2][:3, :3]
+                t_dst = poses[i + t + 2][:3, 3]
 
                 R_rel = R_dst @ R_src_inv
                 t_rel = t_dst - R_rel @ t_src
@@ -258,8 +261,8 @@ def evaluate_per_batch(temp_model, start_image, poses, show=False):
                 # p2
                 p2 = temp_model.encode_to_p(example)
                 # p3
-                R_rel, t_rel = compute_camera_pose(batch["R_s"][0, i + t + 2, ...], batch["t_s"][0, i + t + 2, ...],
-                                                   batch["R_s"][0, i + t + 1, ...], batch["t_s"][0, i + t + 1, ...])
+                R_rel, t_rel = compute_camera_pose(poses[i + t + 2][:3, :3], poses[i + t + 2][:3, 3],
+                                                   poses[i + t + 1][:3, :3], poses[i + t + 1][:3, 3])
                 example["R_rel"] = R_rel.unsqueeze(0)
                 example["t_rel"] = t_rel.unsqueeze(0)
                 p3 = temp_model.encode_to_p(example)
@@ -287,9 +290,16 @@ def evaluate_per_batch(temp_model, start_image, poses, show=False):
 
 
 # generate
-generate_video = evaluate_per_batch(model, start_image, poses, show=True)
+generate_video = evaluate_per_batch(model, start_image, poses, show=False)
 
 # save to file
-for i in range(1, len(generate_video)):
-    forecast_img = np.array(as_png(generate_video[i][0].permute(1, 2, 0)))
-    cv2.imwrite(os.path.join(target_save_path, "predict_%02d.png" % i), forecast_img[:, :, [2, 1, 0]])
+with open(args.input_poses_path, "r") as f:
+    transforms = json.load(f)
+    for i in range(len(generate_video)):
+        img_pil = as_png(generate_video[i][0].permute(1, 2, 0))
+        forecast_img = np.array(img_pil)
+        cv2.imwrite(os.path.join(target_save_path, "predict_%02d.png" % i), forecast_img[:, :, [2, 1, 0]])
+
+        nerf_img = img_pil.resize((transforms['w'], transforms['h']))
+        out_file_name = os.path.basename(transforms['frames'][i]['file_path'])
+        nerf_img.save(out_file_name)
