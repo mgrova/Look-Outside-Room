@@ -26,10 +26,10 @@ parser.add_argument("--base", type=str, default="mp3d_16x16_sine_cview_adaptive"
                     help="experiments name")
 parser.add_argument("--exp", type=str, default="try_1",
                     help="experiments name")
-parser.add_argument("--input_image_path", type=str, default="../configs/custom/sample_data/0.png")
+parser.add_argument("--input_image_path", type=str, default="../configs/custom/sample_data/6.png")
 parser.add_argument("--input_poses_path", type=str, default="../configs/custom/transforms.json")
 parser.add_argument('--gpu', default='0', type=str)
-parser.add_argument("--video_limit", type=int, default=10, help="# of video to test")
+parser.add_argument("--video_limit", type=int, default=5, help="# of video to test")
 parser.add_argument("--seed", type=int, default=2333, help="")
 
 args = parser.parse_args()
@@ -290,7 +290,7 @@ def evaluate_per_batch(temp_model, start_image, poses, show=False, total_time_le
 
 
 # generate
-generate_video = evaluate_per_batch(model, start_image, poses, show=False)
+generate_video = evaluate_per_batch(model, start_image, poses, show=False, total_time_len=args.video_limit)
 
 # save to file
 with open(args.input_poses_path, "r") as f:
@@ -301,5 +301,5 @@ with open(args.input_poses_path, "r") as f:
         cv2.imwrite(os.path.join(target_save_path, "predict_%02d.png" % i), forecast_img[:, :, [2, 1, 0]])
 
         nerf_img = img_pil.resize((transforms['w'], transforms['h']))
-        out_file_name = os.path.basename(transforms['frames'][i]['file_path'])
+        out_file_name = os.path.join(target_save_path, os.path.basename(transforms['frames'][i]['file_path']) + ".png")
         nerf_img.save(out_file_name)
