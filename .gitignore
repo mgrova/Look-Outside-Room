@@ -3,3 +3,4 @@ evaluation/pretrained_models
 .idea
 .vscode
 __pycache__/
+pretrained_models

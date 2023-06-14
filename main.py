@@ -72,12 +72,12 @@ parser.add_argument("--name", type=str, default="exp_1",
                     help="experiments name")
 parser.add_argument("--base", type=str, default="./configs/realestate/realestate_16x16_sine_cview_adaptive.yaml",
                     help="experiments name")
-parser.add_argument("--data-path", type=str, default="/latent_opt_test/RealEstate10K_Downloader/",
+parser.add_argument("--data_path", type=str, default="/latent_opt_test/RealEstate10K_Downloader/",
                     help="data path")
-parser.add_argument("--batch-size", type=int, default=4, help="")
-parser.add_argument("--ckpt-iter", type=int, default=10000,
+parser.add_argument("--batch_size", type=int, default=4, help="")
+parser.add_argument("--ckpt_iter", type=int, default=10000,
                     help="interval for visual the result")
-parser.add_argument("--visual-iter", type=int, default=500,
+parser.add_argument("--visual_iter", type=int, default=500,
                     help="interval for visual the result")
 parser.add_argument("--max_iter", type=int, default=200001,
                     help="epochs for training")

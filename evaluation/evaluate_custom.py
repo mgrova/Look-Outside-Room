@@ -26,8 +26,8 @@ parser.add_argument("--base", type=str, default="mp3d_16x16_sine_cview_adaptive"
                     help="experiments name")
 parser.add_argument("--exp", type=str, default="try_1",
                     help="experiments name")
-parser.add_argument("--input_image_path", type=str, default="../configs/custom/sample_data/6.png")
-parser.add_argument("--input_poses_path", type=str, default="../configs/custom/transforms_simple_forward.json")
+parser.add_argument("--input_image_path", type=str, default="./configs/custom/sample_data/69302567.png")
+parser.add_argument("--input_poses_path", type=str, default="./configs/custom/transforms_simple_forward.json")
 parser.add_argument('--gpu', default='0', type=str)
 parser.add_argument("--video_limit", type=int, default=20, help="# of video to test")
 parser.add_argument("--seed", type=int, default=2333, help="")
@@ -43,7 +43,7 @@ np.random.seed(args.seed)
 random.seed(args.seed)
 
 # config
-config_path = "../configs/mp3d/%s.yaml" % args.base
+config_path = "./configs/mp3d/%s.yaml" % args.base
 cpt_path = "./pretrained_models/matterport/last.ckpt"
 
 
@@ -297,7 +297,8 @@ def load_intrinsics(transforms_file_path, H, W, K):
 
 
 poses = load_poses(args.input_poses_path, convert_from_nerf=True)
-start_image = torch.from_numpy(np.array(Image.open(args.input_image_path).resize((256, 256)))).cuda()[None]
+img_rgb = Image.open(args.input_image_path).resize((256, 256)).convert('RGB')
+start_image = torch.from_numpy(np.array(img_rgb)).cuda()[None]
 K = load_intrinsics(args.input_poses_path, 256, 256, torch.eye(3)).cuda()[None, :3, :3]
 K_inv = K.inverse()
 
