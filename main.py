@@ -84,9 +84,14 @@ parser.add_argument("--max_iter", type=int, default=200001,
 parser.add_argument("--len", type=int, default=3, help="")
 parser.add_argument("--gap", type=int, default=3, help="") # disable in realestate
 parser.add_argument('--gpu', default= '0,1,2,3', type=str)
-parser.add_argument(
-        "--local_rank", type=int, default=0, help="local rank for distributed training"
-    )
+
+# Deprecated
+# parser.add_argument(
+#         "--local_rank", type=int, default=0, help="local rank for distributed training"
+#     )
+
+# torchrun implementation
+local_rank = int(os.environ["LOCAL_RANK"])
 
 args = parser.parse_args()
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
@@ -96,7 +101,7 @@ n_gpu = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
 args.distributed = n_gpu > 1
 
 if args.distributed:
-    torch.cuda.set_device(args.local_rank)
+    torch.cuda.set_device(local_rank)
     torch.distributed.init_process_group(backend="nccl", init_method="env://")
     synchronize()
     
@@ -132,8 +137,8 @@ optimizer, scheduler = model.configure_optimizers()
 model.cuda()
 model = nn.parallel.DistributedDataParallel(
             model,
-            device_ids=[args.local_rank],
-            output_device=args.local_rank,
+            device_ids=[local_rank],
+            output_device=local_rank,
             broadcast_buffers=False,
         )
 
@@ -190,7 +195,7 @@ for idx in pbar:
         pbar.set_description((f"loss: {loss:.4f};"))
 
         if idx % args.ckpt_iter == 0:
-            torch.save(module.state_dict(), os.path.join(save_dir, "evaluation/pretrained_models/matterport/last.ckpt"))
+            torch.save(module.state_dict(), os.path.join(save_dir, "evaluation/pretrained_models/custom/custom_last.ckpt"))
 
     if idx % args.visual_iter == 0:
         if get_rank() == 0:

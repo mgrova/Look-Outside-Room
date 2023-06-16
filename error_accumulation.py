@@ -86,9 +86,13 @@ parser.add_argument("--topk", type=int, default=3, help="")
 parser.add_argument("--T", type=float, default=1, help="")
 parser.add_argument("--sample", action='store_true')
 parser.add_argument('--gpu', default= '0,1,2,3', type=str)
-parser.add_argument(
-        "--local_rank", type=int, default=0, help="local rank for distributed training"
-    )
+# Deprecated
+# parser.add_argument(
+#         "--local_rank", type=int, default=0, help="local rank for distributed training"
+#     )
+
+# torchrun implementation
+local_rank = int(os.environ["LOCAL_RANK"])
 
 args = parser.parse_args()
 os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
@@ -98,7 +102,7 @@ n_gpu = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
 args.distributed = n_gpu > 1
 
 if args.distributed:
-    torch.cuda.set_device(args.local_rank)
+    torch.cuda.set_device(local_rank)
     torch.distributed.init_process_group(backend="nccl", init_method="env://")
     synchronize()
     
@@ -135,8 +139,8 @@ optimizer, scheduler = model.configure_optimizers()
 model.cuda()
 model = nn.parallel.DistributedDataParallel(
             model,
-            device_ids=[args.local_rank],
-            output_device=args.local_rank,
+            device_ids=[local_rank],
+            output_device=local_rank,
             broadcast_buffers=False,
         )
 
@@ -148,7 +152,7 @@ if args.dataset == "realestate":
     dataset = VideoDataset(sparse_dir = sparse_dir, image_dir = image_dir, length = time_len, low = 1, high = 10)
 elif args.dataset == "mp3d":
     from src.data.mp3d.mp3d_abs import VideoDataset
-dataset = VideoDataset(root_path = args.data_path, length = time_len, gap = gap)
+    dataset = VideoDataset(root_path = args.data_path, length = time_len, gap = args.gap)
 else:
     raise ValueError("the dataset must be realestate or mp3d")
 
