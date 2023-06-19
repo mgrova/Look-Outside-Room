@@ -151,8 +151,11 @@ if args.dataset == "realestate":
 elif args.dataset == "mp3d":
     from src.data.mp3d.mp3d_cview import VideoDataset
     dataset = VideoDataset(root_path = args.data_path, length = time_len, gap = args.gap)
+elif args.dataset == "custom":
+    from src.data.custom.custom_cview import VideoDataset
+    dataset = VideoDataset(root_path = args.data_path, length = time_len, low = 3, high = 20)
 else:
-    raise ValueError("the dataset must be realestate or mp3d")
+    raise ValueError("the dataset must be realestate, mp3d or custom")
     
 train_loader = torch.utils.data.DataLoader(
         dataset,
