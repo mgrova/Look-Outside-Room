@@ -23,6 +23,19 @@ from distributed import (
     get_world_size,
 )
 
+from prettytable import PrettyTable
+def count_parameters(model):
+    table = PrettyTable(["Modules", "Parameters"])
+    total_params = 0
+    for name, parameter in model.named_parameters():
+        if not parameter.requires_grad: continue
+        params = parameter.numel()
+        table.add_row([name, params])
+        total_params+=params
+    print(table)
+    print(f"Total Trainable Params: {total_params}")
+    return total_params
+
 def sample_data(loader):
     while True:
         for batch in loader:
@@ -141,6 +154,10 @@ model = nn.parallel.DistributedDataParallel(
             output_device=local_rank,
             broadcast_buffers=False,
         )
+
+# count_parameters(model)
+pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print('Total trainable params {}'.format(pytorch_total_params))
 
 # load data
 if args.dataset == "realestate":
