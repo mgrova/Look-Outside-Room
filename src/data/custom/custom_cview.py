@@ -90,7 +90,8 @@ class VideoDataset(torch.utils.data.Dataset):
 
         clip_paths = []
 
-        scene_paths = glob.glob(os.path.join(root_path, "*"))
+        # To be able to read scenes inside test and train folders
+        scene_paths = glob.glob(os.path.join(root_path, "*/*"))
 
         print("----------------Loading the CUSTOM dataset----------------")
         for scene_path in tqdm(scene_paths):
@@ -98,7 +99,7 @@ class VideoDataset(torch.utils.data.Dataset):
             if (not os.path.isdir(scene_path)):
                 continue
 
-            seq = scene_path.split("/")[-1]
+            # seq = scene_path.split("/")[-1]
 
             im_root = os.path.join(scene_path, 'rgb')
 
