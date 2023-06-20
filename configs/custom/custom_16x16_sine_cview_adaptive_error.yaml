@@ -1,16 +1,17 @@
 model:
   base_learning_rate: 0.0625
-  target: src.models.transformers.geogpt_adaptive.GeoTransformer
+  target: src.models.transformers.geogpt_adaptive_error.GeoTransformer
   params:
-    use_depth: False # depth is not provided to transformer but only used to rescale t
+    ckpt_path: "experiments/mp3d/exp_1/model/last.ckpt"
+    use_depth: False # depth is not provided to transformer
 
     use_scheduler: True
     scheduler_config:
       target: src.lr_scheduler.LambdaWarmUpCosineScheduler
       params:
         verbosity_interval: 0   # 0 or negative to disable
-        warm_up_steps: 5000
-        max_decay_steps: 200001
+        warm_up_steps: 0
+        max_decay_steps: 100001
         lr_start: 2.5e-6
         lr_max: 1.5e-4
         lr_min: 1.0e-8
@@ -22,7 +23,7 @@ model:
         vocab_size: 16384
         block_size: 827 # conditioning + 299 - 1
         n_unmasked: 286 # 30 camera embeddings + 299 merged cond and depth embeddings
-        n_layer: 16 # Changed from the original architecture (32->16)
+        n_layer: 32
         n_head: 16
         n_embd: 1024
 
