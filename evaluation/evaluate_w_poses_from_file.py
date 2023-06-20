@@ -435,7 +435,7 @@ def evaluate_per_batch(temp_model, start_image, poses, show=False, total_time_le
 def main():
     # args
     parser = argparse.ArgumentParser(description="training codes")
-    parser.add_argument("--base", type=str, default="mp3d_16x16_sine_cview_adaptive",
+    parser.add_argument("--base", type=str, default="custom_16x16_sine_cview_adaptive",
                         help="experiments name")
     parser.add_argument("--exp", type=str, default="try_1",
                         help="experiments name")
@@ -456,8 +456,8 @@ def main():
     random.seed(args.seed)
 
     # config
-    config_path = "./configs/mp3d/%s.yaml" % args.base
-    cpt_path = "./pretrained_models/matterport/last.ckpt"
+    config_path = "./configs/custom/%s.yaml" % args.base
+    cpt_path = "./pretrained_models/custom/last.ckpt"
 
 
     poses = load_poses(args.input_poses_path, convert_from_nerf=True)

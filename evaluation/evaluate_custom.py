@@ -16,49 +16,6 @@ import torchvision
 
 from omegaconf import OmegaConf
 
-# args
-parser = argparse.ArgumentParser(description="training codes")
-parser.add_argument("--base", type=str, default="custom_16x16_adaptive",
-                    help="experiments name")
-parser.add_argument("--exp", type=str, default="exp_1_error",
-                    help="experiments name")
-parser.add_argument("--ckpt", type=str, default="last",
-                    help="checkpoint name")
-parser.add_argument("--data-path", type=str, default="/custom/LookOut_UE4",
-                    help="data path")
-parser.add_argument("--len", type=int, default=4, help="len of prediction")
-parser.add_argument('--gpu', default= '0', type=str)
-parser.add_argument("--video_limit", type=int, default=20, help="# of video to test")
-parser.add_argument("--gap", type=int, default=10, help="")
-parser.add_argument("--seed", type=int, default=2333, help="")
-
-args = parser.parse_args()
-os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
-
-# fix the seed
-torch.manual_seed(args.seed)
-torch.cuda.manual_seed(args.seed)
-torch.cuda.manual_seed_all(args.seed)
-np.random.seed(args.seed)
-random.seed(args.seed)
-
-# config
-config_path = "./configs/custom/%s.yaml" % args.base
-cpt_path = "./experiments/custom/%s/model/%s.ckpt" % (args.exp, args.ckpt)
-
-video_limit = args.video_limit
-frame_limit = args.len
-
-target_save_path = "./experiments/custom/%s/evaluate_frame_%d_video_%d_gap_%d/" % (args.exp, frame_limit, video_limit, args.gap)
-os.makedirs(target_save_path, exist_ok=True)
-
-# metircs
-from src.metric.metrics import perceptual_sim, psnr, ssim_metric
-from src.metric.pretrained_networks import PNet
-
-vgg16 = PNet().to("cuda")
-vgg16.eval()
-vgg16.cuda()
 
 # load model
 def get_obj_from_str(string, reload=False):
@@ -82,24 +39,6 @@ def compute_camera_pose(R_dst, t_dst, R_src, t_src):
     t_rel = t_dst-R_rel@t_src
     
     return R_rel, t_rel
-
-config = OmegaConf.load(config_path)
-model = instantiate_from_config(config.model)
-model.cuda()
-model.load_state_dict(torch.load(cpt_path))
-model.eval()
-
-# load dataloader
-from src.data.custom.custom_abs import VideoDataset
-dataset_abs = VideoDataset(root_path = args.data_path, length = args.len, low = args.gap, high = args.gap, split = "test")
-test_loader_abs = torch.utils.data.DataLoader(
-        dataset_abs,
-        batch_size=1,
-        shuffle=True,
-        num_workers=0,
-        pin_memory=True,
-        drop_last = True
-    )
 
 def as_png(x):
     if hasattr(x, "detach"):
@@ -239,82 +178,148 @@ def evaluate_per_batch(temp_model, batch, total_time_len = 20, time_len = 1, sho
                 
     return video_clips
 
-# first save the frame and then evaluate the saved frame 
-n_values_percsim = []
-n_values_ssim = []
-n_values_psnr = []
+def main():
+    # args
+    parser = argparse.ArgumentParser(description="training codes")
+    parser.add_argument("--base", type=str, default="custom_16x16_adaptive",
+                        help="experiments name")
+    parser.add_argument("--exp", type=str, default="exp_1",
+                        help="experiments name")
+    parser.add_argument("--ckpt", type=str, default="last",
+                        help="checkpoint name")
+    parser.add_argument("--data-path", type=str, default="/custom/LookOut_UE4",
+                        help="data path")
+    parser.add_argument("--len", type=int, default=4, help="len of prediction")
+    parser.add_argument('--gpu', default= '0', type=str)
+    parser.add_argument("--video_limit", type=int, default=20, help="# of video to test")
+    parser.add_argument("--gap", type=int, default=10, help="")
+    parser.add_argument("--seed", type=int, default=2333, help="")
 
-pbar = tqdm(total=video_limit)
-b_i = 0
-while b_i < video_limit:    
-    try:
-        batch, index, inter_index = next(iter(test_loader_abs))
-    except:
-        continue
+    args = parser.parse_args()
+    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
+
+    # fix the seed
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    np.random.seed(args.seed)
+    random.seed(args.seed)
+
+    # config
+    config_path = "./configs/custom/%s.yaml" % args.base
+    cpt_path = "./experiments/custom/%s/model/%s.ckpt" % (args.exp, args.ckpt)
+
+    video_limit = args.video_limit
+    frame_limit = args.len
+
+    target_save_path = "./experiments/custom/%s/evaluate_frame_%d_video_%d_gap_%d/" % (args.exp, frame_limit, video_limit, args.gap)
+    os.makedirs(target_save_path, exist_ok=True)
+
+    # metircs
+    from src.metric.metrics import perceptual_sim, psnr, ssim_metric
+    from src.metric.pretrained_networks import PNet
+
+    vgg16 = PNet().to("cuda")
+    vgg16.eval()
+    vgg16.cuda()
+
+    config = OmegaConf.load(config_path)
+    model = instantiate_from_config(config.model)
+    model.cuda()
+    model.load_state_dict(torch.load(cpt_path))
+    model.eval()
+
+    # load dataloader
+    from src.data.custom.custom_abs import VideoDataset
+    dataset_abs = VideoDataset(root_path = args.data_path, length = args.len, low = args.gap, high = args.gap, split = "test")
+    test_loader_abs = torch.utils.data.DataLoader(
+            dataset_abs,
+            batch_size=1,
+            shuffle=True,
+            num_workers=0,
+            pin_memory=True,
+            drop_last = True
+        )
+
+    # first save the frame and then evaluate the saved frame 
+    n_values_percsim = []
+    n_values_ssim = []
+    n_values_psnr = []
+
+    pbar = tqdm(total=video_limit)
+    b_i = 0
+    while b_i < video_limit:    
+        try:
+            batch, index, inter_index = next(iter(test_loader_abs))
+        except:
+            continue
+                    
+        pbar.update(1)
+            
+        values_percsim = []
+        values_ssim = []
+        values_psnr = []
+            
+        sub_dir = os.path.join(target_save_path, "%03d" % b_i)
+        os.makedirs(sub_dir, exist_ok=True)
                 
-    pbar.update(1)
+        for key in batch.keys():
+            batch[key] = batch[key].cuda()
         
-    values_percsim = []
-    values_ssim = []
-    values_psnr = []
-        
-    sub_dir = os.path.join(target_save_path, "%03d" % b_i)
-    os.makedirs(sub_dir, exist_ok=True)
+        generate_video = evaluate_per_batch(model, batch, total_time_len = frame_limit, time_len = 1)
             
-    for key in batch.keys():
-        batch[key] = batch[key].cuda()
-    
-    generate_video = evaluate_per_batch(model, batch, total_time_len = frame_limit, time_len = 1)
-        
-    for i in range(1, len(generate_video)):
-        gt_img = np.array(as_png(batch["rgbs"][0, :, i, ...].permute(1,2,0)))
-        forecast_img = np.array(as_png(generate_video[i][0].permute(1,2,0)))
-        
-        cv2.imwrite(os.path.join(sub_dir, "predict_%02d.png" % i), forecast_img[:, :, [2,1,0]])
-        cv2.imwrite(os.path.join(sub_dir, "gt_%02d.png" % i), gt_img[:, :, [2,1,0]])
-        
-        t_img = (batch["rgbs"][:, :, i, ...] + 1)/2
-        p_img = (generate_video[i] + 1)/2
-        t_perc_sim = perceptual_sim(p_img, t_img, vgg16).item()
+        for i in range(1, len(generate_video)):
+            gt_img = np.array(as_png(batch["rgbs"][0, :, i, ...].permute(1,2,0)))
+            forecast_img = np.array(as_png(generate_video[i][0].permute(1,2,0)))
+            
+            cv2.imwrite(os.path.join(sub_dir, "predict_%02d.png" % i), forecast_img[:, :, [2,1,0]])
+            cv2.imwrite(os.path.join(sub_dir, "gt_%02d.png" % i), gt_img[:, :, [2,1,0]])
+            
+            t_img = (batch["rgbs"][:, :, i, ...] + 1)/2
+            p_img = (generate_video[i] + 1)/2
+            t_perc_sim = perceptual_sim(p_img, t_img, vgg16).item()
 
-        perc_sim = t_perc_sim
-        ssim_sim = ssim_metric(p_img, t_img).item()
-        psnr_sim = psnr(p_img, t_img).item()
+            perc_sim = t_perc_sim
+            ssim_sim = ssim_metric(p_img, t_img).item()
+            psnr_sim = psnr(p_img, t_img).item()
+            
+            values_percsim.append(perc_sim)
+            values_ssim.append(ssim_sim)
+            values_psnr.append(psnr_sim)
         
-        values_percsim.append(perc_sim)
-        values_ssim.append(ssim_sim)
-        values_psnr.append(psnr_sim)
-    
-    n_values_percsim.append(values_percsim)
-    n_values_ssim.append(values_ssim)
-    n_values_psnr.append(values_psnr)
-    
-    b_i += 1
-    
-pbar.close()
-    
-total_percsim = []
-total_ssim = []
-total_psnr = []
+        n_values_percsim.append(values_percsim)
+        n_values_ssim.append(values_ssim)
+        n_values_psnr.append(values_psnr)
+        
+        b_i += 1
+        
+    pbar.close()
+        
+    total_percsim = []
+    total_ssim = []
+    total_psnr = []
 
-with open(os.path.join(target_save_path, "eval.txt"), 'w') as f:
-    for i in range(len(n_values_percsim)):
+    with open(os.path.join(target_save_path, "eval.txt"), 'w') as f:
+        for i in range(len(n_values_percsim)):
 
-        f.write("#%d, percsim: %.04f, ssim: %.02f, psnr: %.02f" % (i, np.mean(n_values_percsim[i]), 
-                                                                   np.mean(n_values_ssim[i]), np.mean(n_values_psnr[i])))
+            f.write("#%d, percsim: %.04f, ssim: %.02f, psnr: %.02f" % (i, np.mean(n_values_percsim[i]), 
+                                                                    np.mean(n_values_ssim[i]), np.mean(n_values_psnr[i])))
+            f.write('\n')
+            
+            for j in range(len(n_values_percsim[i])):
+                percsim = n_values_percsim[i][j]
+                ssim = n_values_ssim[i][j]
+                psnr = n_values_psnr[i][j]
+
+                total_percsim.append(percsim)
+                total_ssim.append(ssim)
+                total_psnr.append(psnr)
+                
+        f.write("Total, percsim: (%.03f, %.02f), ssim: (%.02f, %.02f), psnr: (%.03f, %.02f)" 
+                % (np.mean(total_percsim), np.std(total_percsim), 
+                np.mean(total_ssim), np.std(total_ssim),
+                np.mean(total_psnr), np.std(total_psnr)))
         f.write('\n')
-        
-        for j in range(len(n_values_percsim[i])):
-            percsim = n_values_percsim[i][j]
-            ssim = n_values_ssim[i][j]
-            psnr = n_values_psnr[i][j]
 
-            total_percsim.append(percsim)
-            total_ssim.append(ssim)
-            total_psnr.append(psnr)
-            
-    f.write("Total, percsim: (%.03f, %.02f), ssim: (%.02f, %.02f), psnr: (%.03f, %.02f)" 
-            % (np.mean(total_percsim), np.std(total_percsim), 
-               np.mean(total_ssim), np.std(total_ssim),
-               np.mean(total_psnr), np.std(total_psnr)))
-    f.write('\n')
+if __name__ == "__main__":
+    main()
