@@ -77,8 +77,8 @@ K = np.array([[128.0, 0.0, 127.0],
 K_inv = np.linalg.inv(K)
 
 class VideoDataset(torch.utils.data.Dataset):
-    def __init__(self, root_path = "/custom_data/train", image_size = [256,256], 
-                 length = 3, low = 3, high = 20, is_validation = False):
+    def __init__(self, root_path = "/custom_data/", image_size = [256,256], 
+                 length = 3, low = 3, high = 20, split = "train"):
         super(VideoDataset, self).__init__()
         
         self.image_size = image_size
@@ -90,8 +90,8 @@ class VideoDataset(torch.utils.data.Dataset):
 
         clip_paths = []
 
-        # To be able to read scenes inside test and train folders
-        scene_paths = glob.glob(os.path.join(root_path, "*/*"))
+        current_path = os.path.join(root_path, split)
+        scene_paths = glob.glob(os.path.join(current_path, "*"))
 
         print("----------------Loading the CUSTOM dataset----------------")
         for scene_path in tqdm(scene_paths):
@@ -116,7 +116,6 @@ class VideoDataset(torch.utils.data.Dataset):
         
         self.size = len(self.clip_paths) # num of scene
         
-        self.is_validation = is_validation
         self.transform = transforms.Compose(
         [
             ToTensorVideo(),
