@@ -146,14 +146,15 @@ print("Setting learning rate to {:.2e} = {} (accumulate_grad_batches) * {} (num_
 
 optimizer, scheduler = model.configure_optimizers()
 
-# set to DDP
 model.cuda()
-model = nn.parallel.DistributedDataParallel(
-            model,
-            device_ids=[local_rank],
-            output_device=local_rank,
-            broadcast_buffers=False,
-        )
+# set to DDP
+if args.distributed:
+    model = nn.parallel.DistributedDataParallel(
+                model,
+                device_ids=[local_rank],
+                output_device=local_rank,
+                broadcast_buffers=False,
+            )
 
 # count_parameters(model)
 pytorch_total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -193,7 +194,8 @@ else:
     module = model
 
 train_loader = sample_data(train_loader)
-dist.barrier()
+if args.distributed:
+    dist.barrier()
 
 for idx in pbar:
     batch = next(train_loader)
@@ -251,9 +253,11 @@ for idx in pbar:
             merge = torch.cat([gt_clip.cpu(), recon_clip.cpu(), pred_clip.cpu()], 1).clamp(0,1)
             plt.imsave(os.path.join(visual_dir, "%06d.png" % idx), merge.permute(1,2,0).numpy())
 
-            dist.barrier()
+            if args.distributed:
+                dist.barrier()
         else:
-            dist.barrier()
+            if args.distributed:
+                dist.barrier()
         
 
             
