@@ -46,7 +46,7 @@ def read_target_poses_from_file(filename):
         T_mat[:3, :3] = qvec2rotmat(qvec)
         T_mat[:3, 3]  = tvec
 
-        matrices.append(T_mat)
+        matrices.append(torch.from_numpy(T_mat).cuda().float())
 
     return matrices
     
@@ -155,7 +155,7 @@ def evaluate_per_batch(temp_model, start_image, K, poses, show=False, total_time
             # create dict
             example = dict()
             example["K"] = K
-            example["K_inv"] = K_inv
+            example["K_inv"] = K.inverse()
 
             for t in range(1):
                 example["src_img"] = video_clips[-2]
@@ -252,7 +252,7 @@ def main():
 
     img_rgb = Image.open(args.input_image_path).resize((256, 256)).convert('RGB')
     start_image = torch.from_numpy(np.array(img_rgb)).cuda()[None]
-    K = setup_intrinsics().cuda()
+    K = torch.from_numpy(setup_intrinsics()).cuda()
 
     transform = transforms.Compose([
         ToTensorVideo(),
@@ -275,18 +275,17 @@ def main():
     generate_video = evaluate_per_batch(model, start_image, K, poses, show=False, total_time_len=args.video_limit)
 
     # save to file
-    with open(args.input_poses_path, "r") as f:
-        transforms = json.load(f)
-        for i in range(len(generate_video)):
-            img_pil = as_png(generate_video[i][0].permute(1, 2, 0))
-            forecast_img = np.array(img_pil)
-            cv2.imwrite(os.path.join(target_save_path, "predict_%02d.png" % i), forecast_img[:, :, [2, 1, 0]])
 
-            nerf_img = img_pil.resize((transforms['w'], transforms['h']))
-            out_file_name = os.path.join(target_save_path, os.path.basename(transforms['frames'][i]['file_path']))
-            if not out_file_name.endswith(".png"):
-                out_file_name += ".png"
-            nerf_img.save(out_file_name)
+    for i in range(len(generate_video)):
+        img_pil = as_png(generate_video[i][0].permute(1, 2, 0))
+        forecast_img = np.array(img_pil)
+        cv2.imwrite(os.path.join(target_save_path, "predict_%02d.png" % i), forecast_img[:, :, [2, 1, 0]])
+
+        estim_img = img_pil.resize((256, 256))
+        out_file_name = os.path.join(target_save_path, "output_rendering/render_{}".format(str(i).zfill(3)))
+        if not out_file_name.endswith(".png"):
+            out_file_name += ".png"
+        estim_img.save(out_file_name)
 
 if __name__ == "__main__":
     main()
