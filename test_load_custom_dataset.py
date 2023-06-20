@@ -27,19 +27,32 @@ def as_png(x):
 
 
 data_path = '/home/aiiacvmllab/Documents/datasets/LookOut_UE4'
-# load data
-from src.data.custom.custom_cview import VideoDataset
-dataset = VideoDataset(root_path = data_path, length = 3, low = 3, high = 20)
 
+# Testing loading test data
+from src.data.custom.custom_abs import VideoDataset
+dataset = VideoDataset(root_path=data_path, length = 3, low = 10, high = 10, split = "test")
+test_loader_abs = data.DataLoader(
+        dataset,
+        batch_size=1,
+        shuffle=True,
+        num_workers=0,
+        pin_memory=True,
+        drop_last = True
+    )
+batch = next(iter(test_loader_abs))
+
+# Testing loading train data
+from src.data.custom.custom_cview import VideoDataset
+dataset = VideoDataset(root_path = data_path, length = 3, low = 3, high = 20, split = "train")
 train_loader = data.DataLoader(
         dataset,
         batch_size=2,
         sampler=data_sampler(dataset, shuffle=True, distributed=False),
         drop_last=True
 )
-
 train_loader = sample_data(train_loader)
 batch = next(train_loader)
+
 
 print(batch)
 # print(batch.get('t_s'))

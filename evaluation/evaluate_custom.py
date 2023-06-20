@@ -187,7 +187,7 @@ def main():
                         help="experiments name")
     parser.add_argument("--ckpt", type=str, default="last",
                         help="checkpoint name")
-    parser.add_argument("--data-path", type=str, default="/custom/LookOut_UE4",
+    parser.add_argument("--data_path", type=str, default="/custom/LookOut_UE4",
                         help="data path")
     parser.add_argument("--len", type=int, default=4, help="len of prediction")
     parser.add_argument('--gpu', default= '0', type=str)
@@ -250,8 +250,9 @@ def main():
     b_i = 0
     while b_i < video_limit:    
         try:
-            batch, index, inter_index = next(iter(test_loader_abs))
-        except:
+            batch = next(iter(test_loader_abs))
+        except Exception as e:
+            print(e)
             continue
                     
         pbar.update(1)
