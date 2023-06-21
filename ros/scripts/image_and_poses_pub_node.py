@@ -69,6 +69,7 @@ def read_image_from_file(file_path):
     cv_image_rgb = cv.cvtColor(cv_image, cv.COLOR_BGR2RGB)
     bridge = CvBridge()
     image_msg = bridge.cv2_to_imgmsg(cv_image_rgb)
+    image_msg.encoding = "rgb8"
     return image_msg
 
 def image_poses_to_infer_publisher():
@@ -77,8 +78,8 @@ def image_poses_to_infer_publisher():
     desired_posearray_topic = rospy.get_param('~desired_posearray_topic', default="desired_pose_array")
     start_image_topic       = rospy.get_param('~start_image_topic', default="start_image")
 
-    desired_posearray_pub = rospy.Publisher(desired_posearray_topic, PoseArray, queue_size=1)
-    start_image_pub       = rospy.Publisher(start_image_topic, Image, queue_size=1)
+    desired_posearray_pub = rospy.Publisher(desired_posearray_topic, PoseArray, queue_size=1, latch=True)
+    start_image_pub       = rospy.Publisher(start_image_topic, Image, queue_size=1, latch=True)
     
     poses = read_target_poses_from_file("/home/aiiacvmllab/Documents/datasets/LookOut_UE4/test/dataset_2023-06-19_12:21:19/poses.txt", 10)
     posearray_msg = convert_poses_to_posearray_msg(poses)
@@ -92,6 +93,10 @@ def image_poses_to_infer_publisher():
     # Only publish data once
     desired_posearray_pub.publish(posearray_msg)
     start_image_pub.publish(image_msg)
+
+    while not rospy.is_shutdown():
+        rospy.spin()
+
 
 if __name__ == '__main__':
     try:

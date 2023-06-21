@@ -23,7 +23,6 @@ from torchvision import transforms
 
 from src.data.custom.custom_cview import ToTensorVideo, NormalizeVideo, qvec2rotmat
 
-
 def get_obj_from_str(string, reload=False):
     module, cls = string.rsplit(".", 1)
     if reload:
@@ -77,7 +76,7 @@ class LookOutTransformer():
             checkpoint = "./experiments/custom/{}/model/last.ckpt".format(exp_name)
         self.model = None
         self.__setup_model(base_config, checkpoint)
-        print("Succesfully loaded model")
+        rospy.loginfo("Succesfully loaded model")
 
         # Setup publishers and subscribers
         self.__bridge = CvBridge()
@@ -90,8 +89,12 @@ class LookOutTransformer():
         self.__ts = ApproximateTimeSynchronizer([self.__image_sub, self.__desired_posearray_sub], queue_size=1, slop=0.1)
         self.__ts.registerCallback(self.__inference_cb)
 
+        rospy.loginfo("Succesfully configured subs/pubs")
+        
     def __inference_cb(self, image_msg, posearray_msg):
         
+        rospy.loginfo("Received new info. Starting inference ...")
+
         start_image = self.__convert_image_msg_to_tensor(image_msg)
         poses       = self.__convert_posearray_msg_to_tensor(posearray_msg)
 
@@ -102,10 +105,10 @@ class LookOutTransformer():
         cv_image = self.__bridge.imgmsg_to_cv2(image_msg, desired_encoding="passthrough")
         resized_image = cv.resize(cv_image, (256, 256))
 
-        # TODO. Ensure this conversion based on the encoding
-        print(image_msg.encoding)
-        rgb_image = cv.cvtColor(resized_image, cv.COLOR_BGR2RGB)
-        tensor_image = torch.from_numpy(rgb_image).cuda()[None]
+        if (not image_msg.encoding == "rgb8"):
+            raise Exception("Invalid image encoding: {}".format(image_msg.encoding))
+        
+        tensor_image = torch.from_numpy(resized_image).cuda()[None]
         tensor_image = self.__transform(tensor_image).permute(1, 0, 2, 3)
         return tensor_image
     
@@ -151,6 +154,7 @@ class LookOutTransformer():
         ros_image = self.__bridge.cv2_to_imgmsg(x, encoding="passthrough")
         ros_image.header.stamp    = rospy.Time.now()
         ros_image.header.frame_id = "camera_frame_id"
+        ros_image.encoding        = "rgb8"
         return ros_image
 
     def infer_from_poses_and_image(self, poses, start_image):
@@ -211,15 +215,15 @@ class LookOutTransformer():
             sample_dec = self.model.decode_to_img(index_sample, [1, 256, 16, 16])
             video_clips.append(sample_dec)  # update video_clips list
             end = time.time()
-            print("Inference time: {} sec".format(end - start))
+            rospy.loginfo("Inference time: {} sec".format(end - start))
 
             current_im = self.__infer_to_ros_image(sample_dec.permute(0, 2, 3, 1)[0])
             self.__inference_pub.publish(current_im)
-
+        
         # then generate second
-        N = min(self.__pred_len, len(poses)) # Select the minimal value between the lenght of the poses or the defined lenght
+        frame_limit = min(self.__pred_len, len(poses)) # Select the minimal value between the lenght of the poses or the defined lenght
         with torch.no_grad():
-            for i in tqdm(range(0, N - 2, 1)):
+            for i in (range(0, frame_limit - 2, 1)):
                 conditions = []
 
                 R_src = poses[i][:3, :3]
@@ -288,7 +292,7 @@ class LookOutTransformer():
 
                     sample_dec = self.model.decode_to_img(index_sample, [1, 256, 16, 16])
                     end = time.time()
-                    print("Inference time: {} sec".format(end - start))
+                    rospy.loginfo("Inference time: {} sec".format(end - start))
 
                     current_im = self.__infer_to_ros_image(sample_dec.permute(0, 2, 3, 1)[0])
                     self.__inference_pub.publish(current_im)
@@ -297,7 +301,7 @@ class LookOutTransformer():
 
 if __name__ == '__main__':
     try:
-        vicon_pub = LookOutTransformer('lookout_transformer_inference_node')
+        _ = LookOutTransformer('lookout_transformer_inference_node')
         rospy.spin()
     except rospy.ROSInterruptException:
         pass

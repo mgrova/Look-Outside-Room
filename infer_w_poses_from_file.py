@@ -165,9 +165,9 @@ def evaluate_per_batch(temp_model, start_image, K, poses, total_time_len, show=F
             plt.show()
 
     # then generate second
-    N = min(total_time_len, len(poses)) # Select the minimal value between the lenght of the poses or the defined lenght
+    frame_limit = min(total_time_len, len(poses)) # Select the minimal value between the lenght of the poses or the defined lenght
     with torch.no_grad():
-        for i in tqdm(range(0, N - 2, 1)):
+        for i in tqdm(range(0, frame_limit - 2, 1)):
             conditions = []
 
             R_src = poses[i][:3, :3]
