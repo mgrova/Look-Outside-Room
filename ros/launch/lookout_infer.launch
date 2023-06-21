@@ -10,6 +10,18 @@
   <arg name="desired_posearray_topic" default="desired_pose_array" />
   <arg name="inference_image_topic"   default="inference_img" />
 
+  <arg name="start_image_path"   default="/home/aiiacvmllab/Documents/datasets/LookOut_UE4/test/dataset_2023-06-19_12:21:19/rgb/rgb_0000.png" />
+  <arg name="desired_poses_path" default="/home/aiiacvmllab/Documents/datasets/LookOut_UE4/test/dataset_2023-06-19_12:21:19/poses.txt" />
+  <arg name="poses_to_publish"   default="10" />
+
+  <!-- Node to publish start image and desired poses into syncronized ROS messages from files -->
+  <node pkg="lookout_transformer" name="image_and_poses_pub_node"  type="image_and_poses_pub_node.py" output="screen" >
+    <param name="start_image_path"   value="$(arg start_image_path)" />
+    <param name="desired_poses_path" value="$(arg desired_poses_path)" />
+    <param name="poses_to_publish"   value="$(arg poses_to_publish)" />
+  </node>
+
+  <!-- LookOut model inference node -->
   <node pkg="lookout_transformer" name="lookout_infer_node"  type="lookout_infer_node.py" output="screen" >
     <param name="base_config"             value="$(arg base_config)" />
     <param name="exp_name"                value="$(arg exp_name)" />

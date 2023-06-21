@@ -75,20 +75,25 @@ def read_image_from_file(file_path):
 def image_poses_to_infer_publisher():
     rospy.init_node('image_poses_to_infer_publisher', anonymous=False)
     
+    start_image_path        = rospy.get_param('~start_image_path', default="/home/aiiacvmllab/Documents/datasets/LookOut_UE4/test/dataset_2023-06-19_12:21:19/rgb/rgb_0000.png")
+    desired_poses_path      = rospy.get_param('~desired_poses_path', default="/home/aiiacvmllab/Documents/datasets/LookOut_UE4/test/dataset_2023-06-19_12:21:19/poses.txt")
+    poses_to_publish        = rospy.get_param('~poses_to_publish', default=10)
     desired_posearray_topic = rospy.get_param('~desired_posearray_topic', default="desired_pose_array")
     start_image_topic       = rospy.get_param('~start_image_topic', default="start_image")
 
-    desired_posearray_pub = rospy.Publisher(desired_posearray_topic, PoseArray, queue_size=1, latch=True)
-    start_image_pub       = rospy.Publisher(start_image_topic, Image, queue_size=1, latch=True)
-    
-    poses = read_target_poses_from_file("/home/aiiacvmllab/Documents/datasets/LookOut_UE4/test/dataset_2023-06-19_12:21:19/poses.txt", 10)
+    # Convert poses from file to geometry_msgs/PoseArray message
+    poses = read_target_poses_from_file(desired_poses_path, poses_to_publish)
     posearray_msg = convert_poses_to_posearray_msg(poses)
     posearray_msg.header.stamp    = rospy.Time.now()
     posearray_msg.header.frame_id = "camera_frame_id"
 
-    image_msg = read_image_from_file("/home/aiiacvmllab/Documents/datasets/LookOut_UE4/test/dataset_2023-06-19_12:21:19/rgb/rgb_0000.png")
+    # Convert image from file to sensor_msgs/Image message
+    image_msg = read_image_from_file(start_image_path)
     image_msg.header.stamp    = rospy.Time.now()
     image_msg.header.frame_id = "camera_frame_id"
+    
+    desired_posearray_pub = rospy.Publisher(desired_posearray_topic, PoseArray, queue_size=1, latch=True)
+    start_image_pub       = rospy.Publisher(start_image_topic, Image, queue_size=1, latch=True)
     
     # Only publish data once
     desired_posearray_pub.publish(posearray_msg)
@@ -96,7 +101,6 @@ def image_poses_to_infer_publisher():
 
     while not rospy.is_shutdown():
         rospy.spin()
-
 
 if __name__ == '__main__':
     try:
