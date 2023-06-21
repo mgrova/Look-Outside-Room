@@ -88,7 +88,7 @@ def as_png(x):
     x = x.clip(0, 255).astype(np.uint8)
     return Image.fromarray(x)
 
-def evaluate_per_batch(temp_model, start_image, K, poses, show=False):
+def evaluate_per_batch(temp_model, start_image, K, poses, total_time_len, show=False):
     video_clips = []
     video_clips.append(start_image)
 
@@ -142,7 +142,7 @@ def evaluate_per_batch(temp_model, start_image, K, poses, show=False):
             plt.show()
 
     # then generate second
-    N = len(poses)
+    N = min(total_time_len, len(poses)) # Select the minimal value between the lenght of the poses or the defined lenght
     with torch.no_grad():
         for i in tqdm(range(0, N - 2, 1)):
             conditions = []
@@ -232,6 +232,7 @@ def main():
     parser.add_argument('--gpu', default='0', type=str)
     parser.add_argument("--seed", type=int, default=2333, help="")
     parser.add_argument("--checkpoint", type=str, default="./pretrained_models/custom/last.ckpt")
+    parser.add_argument("--len", type=int, default=4, help="len of prediction")
 
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
@@ -259,7 +260,7 @@ def main():
 
     # create out dir
     target_save_path = "./experiments/custom/{}/evaluate_transforms_{}_frame_{}_poses_len_{}/".format(
-        args.exp, os.path.basename(args.input_poses_path), os.path.basename(args.input_image_path), len(poses))
+        args.exp, os.path.basename(args.input_poses_path), os.path.basename(args.input_image_path), min(args.len, len(poses)))
     os.makedirs(target_save_path, exist_ok=True)
 
     # Configure and load model
@@ -271,7 +272,7 @@ def main():
     model.eval()
 
     # generate
-    generate_video = evaluate_per_batch(model, start_image, K, poses_tensor, show=False)
+    generate_video = evaluate_per_batch(model, start_image, K, poses_tensor, total_time_len = args.len, show=False)
 
     # save to file
     for i in range(len(generate_video)):
