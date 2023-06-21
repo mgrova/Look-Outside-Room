@@ -20,12 +20,12 @@ from omegaconf import OmegaConf
 import time
 
 # format -> x y z qw qx qy qz
-def read_target_poses_from_file(filename):
-    if not os.path.isfile(filename):
-        raise Exception("File {} does not exist".format(filename))
+def read_target_poses_from_file(file_path):
+    if not os.path.isfile(file_path):
+        raise Exception("File {} does not exist".format(file_path))
     
     poses = []
-    with open(filename, 'r') as file:
+    with open(file_path, 'r') as file:
         lines = file.readlines()
         for line in lines:
             if line.startswith('#'):
@@ -96,6 +96,19 @@ def as_png(x):
     return Image.fromarray(x)
 
 def evaluate_per_batch(temp_model, start_image, K, poses, total_time_len, show=False):
+    for pose in poses:
+        if (not pose.is_cuda):
+            print("Poses must be CUDA tensor")
+            return
+    
+    if (not K.is_cuda):
+        print("K must be CUDA tensor")
+        return
+    
+    if (not start_image.is_cuda):
+        print("Image must be CUDA tensor")
+        return
+
     video_clips = []
     video_clips.append(start_image)
 
@@ -288,7 +301,7 @@ def main():
     model.eval()
 
     # generate
-    generate_video = evaluate_per_batch(model, start_image, K, poses_tensor, total_time_len = args.len, show=False)
+    generate_video = evaluate_per_batch(model, start_image, K, poses_tensor, total_time_len = args.len, show=True)
 
     # save to file
     for i in range(len(generate_video)):

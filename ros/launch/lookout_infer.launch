@@ -1,0 +1,25 @@
+<launch>
+
+  <arg name="base_config"             default="custom_16x16_sine_cview_adaptive" />
+  <arg name="exp_name"                default="exp_emb16384" />
+  <arg name="gpu"                     default="0" />
+  <arg name="seed"                    default="2333" />
+  <arg name="checkpoint"              default="/home/aiiacvmllab/Projects/nvs_repos/Look-Outside-Room/experiments/custom/exp_emb16384/model/last.ckpt" />
+  <arg name="prediction_len"          default="4" />
+  <arg name="start_image_topic"       default="start_image" />
+  <arg name="desired_posearray_topic" default="desired_pose_array" />
+  <arg name="inference_image_topic"   default="inference_img" />
+
+  <node pkg="lookout_transformer" name="lookout_infer_node"  type="lookout_infer_node.py" output="screen" >
+    <param name="base_config"             value="$(arg base_config)" />
+    <param name="exp_name"                value="$(arg exp_name)" />
+    <param name="gpu"                     value="$(arg gpu)" />
+    <param name="seed"                    value="$(arg seed)" />
+    <param name="checkpoint"              value="$(arg checkpoint)" />
+    <param name="prediction_len"          value="$(arg prediction_len)" />
+    <param name="start_image_topic"       value="$(arg start_image_topic)" />
+    <param name="desired_posearray_topic" value="$(arg desired_posearray_topic)" />
+    <param name="inference_image_topic"   value="$(arg inference_image_topic)" />
+  </node>
+
+</launch>
