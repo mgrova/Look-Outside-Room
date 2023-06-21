@@ -1,24 +1,23 @@
 import random
 import os
 import argparse
-import json
-import math
 
 import cv2
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-import sys, datetime, glob, importlib
+import sys, importlib
 
 sys.path.insert(0, ".")
 
 import torch
-import torchvision
 from torchvision import transforms
 from src.data.custom.custom_cview import ToTensorVideo, NormalizeVideo, qvec2rotmat
 
 from omegaconf import OmegaConf
+
+import time
 
 # format -> x y z qw qx qy qz
 def read_target_poses_from_file(filename):
@@ -30,18 +29,26 @@ def read_target_poses_from_file(filename):
         lines = file.readlines()
         for line in lines:
             if line.startswith('#'):
+                print("Ensure that is the format is propperly deparsed. Current format: {}".format(line))
                 continue
             else:
                 pose = line.split(' ')
                 pose = [float(el) for el in pose]
                 poses.append(pose)
-
-    # Convert format (x, y, z, qw, qx, qy, qz) to 4x4 matrix
+    
+    # Convert pose to 4x4 matrix
     matrices = []
     for pose in poses:
-        tvec = np.array(tuple(map(float, pose[0:3])))
-        qvec = np.array(tuple(map(float, pose[3:7])))
-
+        if len(pose) == 8:
+            # format (id, x, y, z, qw, qx, qy, qz)
+            tvec = np.array(tuple(map(float, pose[1:4])))
+            qvec = np.array(tuple(map(float, pose[4:8])))
+        elif len(pose) == 7:
+            # format (x, y, z, qw, qx, qy, qz)
+            tvec = np.array(tuple(map(float, pose[0:3])))
+            qvec = np.array(tuple(map(float, pose[3:7])))
+        else:
+            raise Exception("Invalid poses lenght: {}".format(len(poses)))
         T_mat = np.zeros([3, 4])
         T_mat[:3, :3] = qvec2rotmat(qvec)
         T_mat[:3, 3]  = tvec
@@ -125,6 +132,8 @@ def evaluate_per_batch(temp_model, start_image, K, poses, total_time_len, show=F
 
         prototype = torch.cat(conditions, 1)
         z_start_indices = c_indices[:, :0]
+
+        start = time.time()
         index_sample = temp_model.sample_latent(z_start_indices, prototype, [p1, None, None],
                                                 steps=c_indices.shape[1],
                                                 temperature=1.0,
@@ -132,10 +141,11 @@ def evaluate_per_batch(temp_model, start_image, K, poses, total_time_len, show=F
                                                 top_k=100,
                                                 callback=lambda k: None,
                                                 embeddings=None)
-
         sample_dec = temp_model.decode_to_img(index_sample, [1, 256, 16, 16])
         video_clips.append(sample_dec)  # update video_clips list
         current_im = as_png(sample_dec.permute(0, 2, 3, 1)[0])
+        end = time.time()
+        print("Inference time: {} sec".format(end - start))
 
         if show:
             plt.imshow(current_im)
@@ -202,6 +212,7 @@ def evaluate_per_batch(temp_model, start_image, K, poses, total_time_len, show=F
                 prototype = torch.cat(conditions, 1)
 
                 z_start_indices = c_indices[:, :0]
+                start = time.time()
                 index_sample = temp_model.sample_latent(z_start_indices, prototype, [p1, p2, p3],
                                                         steps=c_indices.shape[1],
                                                         temperature=1.0,
@@ -213,6 +224,8 @@ def evaluate_per_batch(temp_model, start_image, K, poses, total_time_len, show=F
                 sample_dec = temp_model.decode_to_img(index_sample, [1, 256, 16, 16])
                 current_im = as_png(sample_dec.permute(0, 2, 3, 1)[0])
                 video_clips.append(sample_dec)  # update video_clips list
+                end = time.time()
+                print("Inference time: {} sec".format(end - start))
 
                 if show:
                     plt.imshow(current_im)
@@ -231,7 +244,7 @@ def main():
     parser.add_argument("--input_poses_path", type=str, default="./evaluation/config_custom/poses.txt")
     parser.add_argument('--gpu', default='0', type=str)
     parser.add_argument("--seed", type=int, default=2333, help="")
-    parser.add_argument("--checkpoint", type=str, default="./pretrained_models/custom/last.ckpt")
+    parser.add_argument("--checkpoint", type=str, default="")
     parser.add_argument("--len", type=int, default=4, help="len of prediction")
 
     args = parser.parse_args()
@@ -264,6 +277,9 @@ def main():
     os.makedirs(target_save_path, exist_ok=True)
 
     # Configure and load model
+    if args.checkpoint == "":
+        args.checkpoint = "./experiments/custom/{}/model/last.ckpt".format(args.exp)
+
     config_path = "./configs/custom/{}.yaml".format(args.base)
     config = OmegaConf.load(config_path)
     model = instantiate_from_config(config.model)

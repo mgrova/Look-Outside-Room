@@ -77,9 +77,6 @@ def evaluate_per_batch(temp_model, batch, total_time_len = 20, time_len = 1, sho
         example["R_rel"] = R_rel.unsqueeze(0)
         example["t_rel"] = t_rel.unsqueeze(0)
 
-        print(example)
-
-
         embeddings_warp = temp_model.encode_to_e(example)
         conditions.append(embeddings_warp)
         # p1
