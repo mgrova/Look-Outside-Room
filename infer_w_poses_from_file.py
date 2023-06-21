@@ -46,7 +46,7 @@ def read_target_poses_from_file(filename):
         T_mat[:3, :3] = qvec2rotmat(qvec)
         T_mat[:3, 3]  = tvec
 
-        matrices.append(torch.from_numpy(T_mat).cuda().float())
+        matrices.append(T_mat)
 
     return matrices
     
@@ -54,8 +54,7 @@ def setup_intrinsics():
     K = np.array([[128.0, 0.0, 127.0],
                   [0.0, 128.0, 127.0],
                   [0.0, 0.0, 1.0]], dtype=np.float32)
-
-    return K
+    return torch.from_numpy(K)
 
 # load model
 def get_obj_from_str(string, reload=False):
@@ -89,7 +88,7 @@ def as_png(x):
     x = x.clip(0, 255).astype(np.uint8)
     return Image.fromarray(x)
 
-def evaluate_per_batch(temp_model, start_image, K, poses, show=False, total_time_len=20):
+def evaluate_per_batch(temp_model, start_image, K, poses, show=False):
     video_clips = []
     video_clips.append(start_image)
 
@@ -143,7 +142,7 @@ def evaluate_per_batch(temp_model, start_image, K, poses, show=False, total_time
             plt.show()
 
     # then generate second
-    N = min(total_time_len, len(poses))
+    N = len(poses)
     with torch.no_grad():
         for i in tqdm(range(0, N - 2, 1)):
             conditions = []
@@ -228,11 +227,11 @@ def main():
                         help="experiments name")
     parser.add_argument("--exp", type=str, default="try_1",
                         help="experiments name")
-    parser.add_argument("--input_image_path", type=str, default="./configs/custom/sample_data/69302567.png")
-    parser.add_argument("--input_poses_path", type=str, default="./configs/custom/transforms_simple_forward.json")
+    parser.add_argument("--input_image_path", type=str, default="./evaluation/config_custom/rgb_0010.png")
+    parser.add_argument("--input_poses_path", type=str, default="./evaluation/config_custom/poses.txt")
     parser.add_argument('--gpu', default='0', type=str)
-    parser.add_argument("--video_limit", type=int, default=20, help="# of video to test")
     parser.add_argument("--seed", type=int, default=2333, help="")
+    parser.add_argument("--checkpoint", type=str, default="./pretrained_models/custom/last.ckpt")
 
     args = parser.parse_args()
     os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
@@ -244,48 +243,41 @@ def main():
     np.random.seed(args.seed)
     random.seed(args.seed)
 
-    # config
-    config_path = "./configs/custom/%s.yaml" % args.base
-    cpt_path = "./pretrained_models/custom/last.ckpt"
-
+    # Setup input poses
     poses = read_target_poses_from_file(args.input_poses_path)
+    poses_tensor = [torch.from_numpy(curr_pose).cuda().float() for curr_pose in poses]
+    K = setup_intrinsics().cuda()[None, :3, :3]
 
+    # Setup initial image
     img_rgb = Image.open(args.input_image_path).resize((256, 256)).convert('RGB')
     start_image = torch.from_numpy(np.array(img_rgb)).cuda()[None]
-    K = torch.from_numpy(setup_intrinsics()).cuda()
-
     transform = transforms.Compose([
         ToTensorVideo(),
         NormalizeVideo((0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True),
     ])
-
     start_image = transform(start_image).permute(1, 0, 2, 3)
 
     # create out dir
-    target_save_path = "./experiments/custom/%s/evaluate_transforms_%s_frame_%s_poses_%d_len_%d/" % (args.exp, os.path.basename(args.input_poses_path), os.path.basename(args.input_image_path), len(poses), args.video_limit)
+    target_save_path = "./experiments/custom/{}/evaluate_transforms_{}_frame_{}_poses_len_{}/".format(
+        args.exp, os.path.basename(args.input_poses_path), os.path.basename(args.input_image_path), len(poses))
     os.makedirs(target_save_path, exist_ok=True)
 
+    # Configure and load model
+    config_path = "./configs/custom/{}.yaml".format(args.base)
     config = OmegaConf.load(config_path)
     model = instantiate_from_config(config.model)
     model.cuda()
-    model.load_state_dict(torch.load(cpt_path))
+    model.load_state_dict(torch.load(args.checkpoint))
     model.eval()
 
     # generate
-    generate_video = evaluate_per_batch(model, start_image, K, poses, show=False, total_time_len=args.video_limit)
+    generate_video = evaluate_per_batch(model, start_image, K, poses_tensor, show=False)
 
     # save to file
-
     for i in range(len(generate_video)):
         img_pil = as_png(generate_video[i][0].permute(1, 2, 0))
         forecast_img = np.array(img_pil)
         cv2.imwrite(os.path.join(target_save_path, "predict_%02d.png" % i), forecast_img[:, :, [2, 1, 0]])
-
-        estim_img = img_pil.resize((256, 256))
-        out_file_name = os.path.join(target_save_path, "output_rendering/render_{}".format(str(i).zfill(3)))
-        if not out_file_name.endswith(".png"):
-            out_file_name += ".png"
-        estim_img.save(out_file_name)
 
 if __name__ == "__main__":
     main()

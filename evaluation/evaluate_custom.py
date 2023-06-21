@@ -57,7 +57,7 @@ def evaluate_per_batch(temp_model, batch, total_time_len = 20, time_len = 1, sho
         R_src = batch["R_s"][0, 0, ...]
         R_src_inv = R_src.transpose(-1,-2)
         t_src = batch["t_s"][0, 0, ...]
-
+        
         # create dict
         example = dict()
         example["K"] = batch["K"]
@@ -76,6 +76,9 @@ def evaluate_per_batch(temp_model, batch, total_time_len = 20, time_len = 1, sho
 
         example["R_rel"] = R_rel.unsqueeze(0)
         example["t_rel"] = t_rel.unsqueeze(0)
+
+        print(example)
+
 
         embeddings_warp = temp_model.encode_to_e(example)
         conditions.append(embeddings_warp)
@@ -191,7 +194,7 @@ def main():
                         help="data path")
     parser.add_argument("--len", type=int, default=4, help="len of prediction")
     parser.add_argument('--gpu', default= '0', type=str)
-    parser.add_argument("--video_limit", type=int, default=20, help="# of video to test")
+    parser.add_argument("--video_limit", type=int, default=20, help="number of videos to test")
     parser.add_argument("--gap", type=int, default=10, help="")
     parser.add_argument("--seed", type=int, default=2333, help="")
 
