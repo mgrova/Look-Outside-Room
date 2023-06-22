@@ -20,12 +20,12 @@ from omegaconf import OmegaConf
 import time
 
 # format -> x y z qw qx qy qz
-def read_target_poses_from_file(filename):
-    if not os.path.isfile(filename):
-        raise Exception("File {} does not exist".format(filename))
+def read_target_poses_from_file(file_path):
+    if not os.path.isfile(file_path):
+        raise Exception("File {} does not exist".format(file_path))
     
     poses = []
-    with open(filename, 'r') as file:
+    with open(file_path, 'r') as file:
         lines = file.readlines()
         for line in lines:
             if line.startswith('#'):
@@ -152,9 +152,9 @@ def evaluate_per_batch(temp_model, start_image, K, poses, total_time_len, show=F
             plt.show()
 
     # then generate second
-    N = min(total_time_len, len(poses)) # Select the minimal value between the lenght of the poses or the defined lenght
+    frame_limit = min(total_time_len, len(poses)) # Select the minimal value between the lenght of the poses or the defined lenght
     with torch.no_grad():
-        for i in tqdm(range(0, N - 2, 1)):
+        for i in tqdm(range(0, frame_limit - 2, 1)):
             conditions = []
 
             R_src = poses[i][:3, :3]
