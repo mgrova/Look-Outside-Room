@@ -8,6 +8,8 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import sys, importlib
+import datetime 
+import math
 
 sys.path.insert(0, ".")
 
@@ -19,7 +21,6 @@ from omegaconf import OmegaConf
 
 import time
 
-# format -> x y z qw qx qy qz
 def read_target_poses_from_file(file_path):
     if not os.path.isfile(file_path):
         raise Exception("File {} does not exist".format(file_path))
@@ -87,6 +88,25 @@ def compute_camera_pose(R_dst, t_dst, R_src, t_src):
     t_rel = t_dst - R_rel @ t_src
 
     return R_rel, t_rel
+
+def rotation_matrix_to_euler_angles(R):
+    sy = np.sqrt(R[0, 0] * R[0, 0] + R[1, 0] * R[1, 0])
+
+    if sy < 1e-6:
+        rx = math.atan2(R[2, 1], R[2, 2])
+        ry = math.atan2(-R[2, 0], sy)
+        rz = 0.0
+    else:
+        rx = math.atan2(R[2, 1], R[2, 2])
+        ry = math.atan2(-R[2, 0], sy)
+        rz = math.atan2(R[1, 0], R[0, 0])
+
+    # Convert angles to degrees
+    rx = math.degrees(rx)
+    ry = math.degrees(ry)
+    rz = math.degrees(rz)
+
+    return rx, ry, rz
 
 def as_png(x):
     if hasattr(x, "detach"):
@@ -238,13 +258,13 @@ def main():
     parser = argparse.ArgumentParser(description="training codes")
     parser.add_argument("--base", type=str, default="custom_16x16_sine_cview_adaptive",
                         help="experiments name")
-    parser.add_argument("--exp", type=str, default="try_1",
-                        help="experiments name")
+    parser.add_argument("--exp", type=str, default="try_1", help="experiments name")
     parser.add_argument("--input_image_path", type=str, default="./evaluation/config_custom/rgb_0010.png")
     parser.add_argument("--input_poses_path", type=str, default="./evaluation/config_custom/poses.txt")
     parser.add_argument('--gpu', default='0', type=str)
     parser.add_argument("--seed", type=int, default=2333, help="")
     parser.add_argument("--checkpoint", type=str, default="")
+    parser.add_argument("--config_path", type=str, default="")
     parser.add_argument("--len", type=int, default=4, help="len of prediction")
 
     args = parser.parse_args()
@@ -272,28 +292,34 @@ def main():
     start_image = transform(start_image).permute(1, 0, 2, 3)
 
     # create out dir
-    target_save_path = "./experiments/custom/{}/evaluate_transforms_{}_frame_{}_poses_len_{}/".format(
-        args.exp, os.path.basename(args.input_poses_path), os.path.basename(args.input_image_path), min(args.len, len(poses)))
+    target_save_path = "./experiments/custom/{}/{}_evaluate_length_{}/".format(
+        args.exp, datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S"), args.len)
     os.makedirs(target_save_path, exist_ok=True)
 
     # Configure and load model
     if args.checkpoint == "":
         args.checkpoint = "./experiments/custom/{}/model/last.ckpt".format(args.exp)
 
-    config_path = "./configs/custom/{}.yaml".format(args.base)
-    config = OmegaConf.load(config_path)
+    if args.config_path == "":
+        args.config_path = "./configs/custom/{}.yaml".format(args.base)
+
+    config = OmegaConf.load(args.config_path)
     model = instantiate_from_config(config.model)
     model.cuda()
     model.load_state_dict(torch.load(args.checkpoint))
     model.eval()
 
     # generate
-    generate_video = evaluate_per_batch(model, start_image, K, poses_tensor, total_time_len = args.len, show=False)
+    predicted_video = evaluate_per_batch(model, start_image, K, poses_tensor, total_time_len = args.len, show=False)
 
     # save to file
-    for i in range(len(generate_video)):
-        img_pil = as_png(generate_video[i][0].permute(1, 2, 0))
+    for i, (pred_img, curr_pose_mat) in enumerate(zip(predicted_video, poses)):
+        img_pil = as_png(pred_img[0].permute(1, 2, 0))
         forecast_img = np.array(img_pil)
+        roll_deg, pitch_deg, yaw_deg = rotation_matrix_to_euler_angles(curr_pose_mat[:3, :3])
+        tvec = curr_pose_mat[:3, 3]
+        print("Prediction {} is based on pos: ({}, {}, {}) and ea: ({}, {}, {})".format(
+            i, tvec[0], tvec[1], tvec[2], roll_deg, pitch_deg, yaw_deg))
         cv2.imwrite(os.path.join(target_save_path, "predict_%02d.png" % i), forecast_img[:, :, [2, 1, 0]])
 
 if __name__ == "__main__":

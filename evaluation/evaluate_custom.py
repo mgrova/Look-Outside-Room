@@ -185,7 +185,7 @@ def main():
                         help="experiments name")
     parser.add_argument("--exp", type=str, default="exp_1",
                         help="experiments name")
-    parser.add_argument("--ckpt", type=str, default="last",
+    parser.add_argument("--ckpt_path", type=str, default="",
                         help="checkpoint name")
     parser.add_argument("--data_path", type=str, default="/custom/LookOut_UE4",
                         help="data path")
@@ -207,12 +207,14 @@ def main():
 
     # config
     config_path = "./configs/custom/%s.yaml" % args.base
-    cpt_path = "./experiments/custom/%s/model/%s.ckpt" % (args.exp, args.ckpt)
+    if (args.ckpt_path == ""):
+        args.ckpt_path = "./experiments/custom/%s/model/last.ckpt" % (args.exp)
 
     video_limit = args.video_limit
     frame_limit = args.len
 
-    target_save_path = "./experiments/custom/%s/evaluate_frame_%d_video_%d_gap_%d/" % (args.exp, frame_limit, video_limit, args.gap)
+    target_save_path = "./experiments/custom/{}/{}_evaluate_frame_{}_video_{}_gap_{}/".format(
+        args.exp, datetime.datetime.now().strftime("%Y-%m-%d_%H:%M:%S"), frame_limit, video_limit, args.gap)
     os.makedirs(target_save_path, exist_ok=True)
 
     # metircs
@@ -226,7 +228,7 @@ def main():
     config = OmegaConf.load(config_path)
     model = instantiate_from_config(config.model)
     model.cuda()
-    model.load_state_dict(torch.load(cpt_path))
+    model.load_state_dict(torch.load(args.ckpt_path))
     model.eval()
 
     # load dataloader
@@ -275,6 +277,9 @@ def main():
             
             cv2.imwrite(os.path.join(sub_dir, "predict_%02d.png" % i), forecast_img[:, :, [2,1,0]])
             cv2.imwrite(os.path.join(sub_dir, "gt_%02d.png" % i), gt_img[:, :, [2,1,0]])
+
+            concat_imgs = np.hstack([forecast_img[:, :, [2,1,0]], gt_img[:, :, [2,1,0]]])
+            cv2.imwrite(os.path.join(sub_dir, "pred_gt_%02d.png" % i), concat_imgs)
             
             t_img = (batch["rgbs"][:, :, i, ...] + 1)/2
             p_img = (generate_video[i] + 1)/2
