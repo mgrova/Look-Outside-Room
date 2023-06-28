@@ -214,9 +214,9 @@ class GeoTransformer(nn.Module):
         
         # TODO. Make sense use this GT? We are prediction image 1 and 2, so we want to 
         # learn relative transformation between each t image
-        gts_poses.append([batch["R_01"], batch["t_01"]])
-        gts_poses.append([batch["R_12"], batch["t_12"]])
-    
+        gts_poses.append([batch["R_01"].cpu().numpy(), batch["t_01"].cpu().numpy()])
+        gts_poses.append([batch["R_12"].cpu().numpy(), batch["t_12"].cpu().numpy()])
+
         _, c_indices = self.encode_to_c(batch["rgbs"][:, :, time_len-1, ...]) # final frame
         c_emb = self.transformer.tok_emb(c_indices)
         conditions.append(c_emb)
@@ -384,19 +384,20 @@ class GeoTransformer(nn.Module):
         # Convert predictions to Nx7 tensor
         est_poses = []
         for pred in predictions:
-            pred_batch = self.decode_from_p(pred.detach())
-            q   = rotmat2qvec(pred_batch["R_rel"].cpu().numpy())
-            pos = pred_batch["t_rel"][0:3]
+            pred_batch = self.decode_from_p(pred.detach().cpu())
+            q   = rotmat2qvec(pred_batch["R_rel"].numpy())
+            pos = pred_batch["t_rel"][0:3].numpy().flat
             est_pose = [pos[0], pos[1], pos[2], 
                         q[0], q[1], q[2], q[3]]
-            est_poses.append(est_pose)        
+            est_poses.append(est_pose)
+
         est_poses = torch.tensor(est_poses).to("cuda")
 
         # Convert gts to Nx7 tensor
         gt_poses = []
-        for gt in gts:
-            q = rotmat2qvec(gt[0].cpu().numpy())
-            pos = gt[1].cpu().numpy()[0]
+        for rot, trans in gts:
+            q = rotmat2qvec(rot)
+            pos = trans.flat # Due to multiples batches
             gt_pose = [pos[0], pos[1], pos[2], 
                        q[0], q[1], q[2], q[3]]
             gt_poses.append(gt_pose)
