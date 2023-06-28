@@ -20,9 +20,9 @@ model:
       params:
         time_len: 3
         vocab_size: 16384
-        block_size: 827 # conditioning + 299 - 1
-        n_unmasked: 286 # 30 camera embeddings + 299 merged cond and depth embeddings
-        n_layer: 16 # Changed from the original architecture (32->16)
+        block_size: 827 # conditioning + 286 - 1
+        n_unmasked: 286 # 30 camera embeddings + 256 merged cond and depth embeddings
+        n_layer: 16     # Changed from the original architecture (32->16)
         n_head: 16
         n_embd: 1024
 
@@ -69,7 +69,7 @@ model:
           - "t"
           - "K"
           - "K_inv"
-        n_positions: 30
+        n_positions: 30 # R(3x3) + t(3) + K(3x3) + K_inv(3x3)
         n_channels: 1
         n_embed: 1024
         bias: False

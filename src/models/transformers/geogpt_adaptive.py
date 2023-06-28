@@ -8,6 +8,8 @@ from torch.optim.lr_scheduler import LambdaLR
 from einops import rearrange
 
 from src.main import instantiate_from_config
+from src.modules.losses.pose_losses import CameraPoseLoss
+from src.data.custom.custom_abs import rotmat2qvec
 
 def disabled_train(self, mode=True):
     """Overwrite model.train with this function to make sure train/eval mode
@@ -55,6 +57,8 @@ class GeoTransformer(nn.Module):
 
         if ckpt_path is not None:
             self.init_from_ckpt(ckpt_path, ignore_keys=ignore_keys)
+
+        self.pose_loss = CameraPoseLoss().to("cuda")
         
     def init_from_ckpt(self, path, ignore_keys=list()):
         sd = torch.load(path, map_location="cpu")["state_dict"]
@@ -128,9 +132,50 @@ class GeoTransformer(nn.Module):
             inputs.append(entry)
             
         p = torch.cat(inputs, dim=1) # B, 30
-
+        
         return p
+    
+    def decode_from_p(self, p):
+        # Initialize a dictionary to store decoded entries
+        batch = {"R_rel": None,
+                "t_rel": None,
+                "K": None,
+                "K_inv": None}
 
+        p = p.reshape(-1, p.size(-1))
+
+        # Calculate the number of elements per entry
+        num_elements_rot   = 9
+        num_elements_trans = 3
+
+        # Extract and reshape the entries
+        start_idx = 0
+
+        # Decode R_rel entry
+        r_rel_entry = p[start_idx : start_idx + num_elements_rot, :]
+        reshaped_r_rel_entry = r_rel_entry.reshape(3, 3, -1)
+        batch["R_rel"] = reshaped_r_rel_entry
+        start_idx += num_elements_rot
+
+        # Decode t_rel entry
+        t_rel_entry = p[start_idx : start_idx + num_elements_trans, :]
+        reshaped_t_rel_entry = t_rel_entry.reshape(3, -1)
+        batch["t_rel"] = reshaped_t_rel_entry
+        start_idx += num_elements_trans
+
+        # Decode K entry
+        k_entry = p[start_idx : start_idx + num_elements_rot, :]
+        reshaped_k_entry = k_entry.reshape(3, 3, -1)
+        batch["K"] = reshaped_k_entry
+        start_idx += num_elements_rot
+
+        # Decode K_inv entry
+        k_inv_entry = p[start_idx : start_idx + num_elements_rot, :]
+        reshaped_k_inv_entry = k_inv_entry.reshape(3, 3, -1)
+        batch["K_inv"] = reshaped_k_inv_entry
+
+        return batch
+        
     def forward(self, batch):
         # get time
         B, time_len = batch["rgbs"].shape[0], batch["rgbs"].shape[2]
@@ -141,10 +186,10 @@ class GeoTransformer(nn.Module):
         example["K_inv"] = batch["K_inv"]
         
         conditions = [] # list of [camera, frame] 
-        gts = [] # gt imgs | except the first imgs
-        forecasts = []
+        gts_imgs   = [] # gt imgs  | except the first img
+        gts_poses  = [] # gt poses | except the first pose
         p = []
-        
+
         for t in range(0, time_len-1): 
             _, c_indices = self.encode_to_c(batch["rgbs"][:, :, t, ...])
             c_emb = self.transformer.tok_emb(c_indices)
@@ -165,12 +210,17 @@ class GeoTransformer(nn.Module):
                 conditions.append(embeddings_warp)
 
             if t > 0:
-                gts.append(c_indices) # for loss
+                gts_imgs.append(c_indices) # for loss
         
+        # TODO. Make sense use this GT? We are prediction image 1 and 2, so we want to 
+        # learn relative transformation between each t image
+        gts_poses.append([batch["R_01"], batch["t_01"]])
+        gts_poses.append([batch["R_12"], batch["t_12"]])
+    
         _, c_indices = self.encode_to_c(batch["rgbs"][:, :, time_len-1, ...]) # final frame
         c_emb = self.transformer.tok_emb(c_indices)
         conditions.append(c_emb)
-        gts.append(c_indices)
+        gts_imgs.append(c_indices)
         
         conditions = torch.cat(conditions, 1) # B, L, 1024
         prototype = conditions[:, 0:286, :]
@@ -181,17 +231,24 @@ class GeoTransformer(nn.Module):
         example["t_rel"] = batch["t_12"]
         p.append(self.encode_to_p(example))
         
-        logits, _ = self.transformer.iter_forward(prototype, z_emb, p = p)
-        logits = logits[:, prototype.shape[1]-1:]
+        images_pred, poses_pred, _ = self.transformer.iter_forward(prototype, z_emb, p = p)
         
+        forecasts_imgs = []
         for t in range(0, time_len-2):
-            forecasts.append(logits[:, 286*t:286*t+256, :])
+            forecasts_imgs.append(images_pred[:, 286*t:286*t+256, :])
+        forecasts_imgs.append(images_pred[:, -256::, :]) # final frame
+
+        image_loss = self.compute_image_loss(forecasts_imgs, gts_imgs)
+
+        # TODO. Check if this make sense. It is the pose T_01 and T_02. I think so.
+        # Make it as for loop depending of the time_len (as forecast_images)
+        forecasts_poses = []
+        forecasts_poses.append(poses_pred[:, 256 : 286, :])
+        forecasts_poses.append(poses_pred[:, 286+256 : 286+256+30, :])
         
-        forecasts.append(logits[:, -256::, :]) # final frame
-        
-        loss, log_dict = self.compute_loss(torch.cat(forecasts, 0), torch.cat(gts, 0), split="train")
-        
-        return forecasts, gts, loss, log_dict
+        poses_loss = self.compute_pose_loss(forecasts_poses, gts_poses)
+
+        return forecasts_imgs, gts_imgs, image_loss, forecasts_poses, gts_poses, poses_loss
 
     def top_k_logits(self, logits, k):
         v, ix = torch.topk(logits, k)
@@ -313,9 +370,45 @@ class GeoTransformer(nn.Module):
         x = self.first_stage_model.decode(quant_z)
         return x
     
-    def compute_loss(self, logits, targets, split="train"):
-        loss = F.cross_entropy(logits.reshape(-1, logits.size(-1)), targets.reshape(-1))
-        return loss, {f"{split}/loss": loss.detach()}
+    def compute_image_loss(self, logits, targets):
+        logits_array  = torch.cat(logits, 0)
+        logits_final  = logits_array.reshape(-1, logits_array.size(-1))
+        
+        gts_array = torch.cat(targets, 0)
+        gts_finals = gts_array.reshape(-1)
+
+        # print("image_logits shape: {}".format(logits_final.shape))
+
+        loss = F.cross_entropy(logits_final, gts_finals)
+        return loss
+    
+    def compute_pose_loss(self, predictions, gts):
+        # Convert predictions to Nx7 tensor
+        est_poses = []
+        for pred in predictions:
+            pred_batch = self.decode_from_p(pred.detach())
+            q   = rotmat2qvec(pred_batch["R_rel"].cpu().numpy())
+            pos = pred_batch["t_rel"][0:3]
+            est_pose = [pos[0], pos[1], pos[2], 
+                        q[0], q[1], q[2], q[3]]
+            est_poses.append(est_pose)        
+        est_poses = torch.tensor(est_poses).to("cuda")
+
+        # Convert gts to Nx7 tensor
+        gt_poses = []
+        for gt in gts:
+            q = rotmat2qvec(gt[0].cpu().numpy())
+            pos = gt[1].cpu().numpy()[0]
+            gt_pose = [pos[0], pos[1], pos[2], 
+                       q[0], q[1], q[2], q[3]]
+            gt_poses.append(gt_pose)
+        
+        gt_poses = torch.tensor(gt_poses).to("cuda")
+
+        # x,y,z,qw,qx,qy,qz
+        loss = self.pose_loss(est_poses, gt_poses)
+        return loss
+
 
     def configure_optimizers(self):
         # separate out all parameters to those that will and won't experience regularizing weight decay

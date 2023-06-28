@@ -203,18 +203,21 @@ for idx in pbar:
     for key in batch.keys():
         batch[key] = batch[key].cuda()
     
-    forecasts, gts, loss, log_dict = module(batch)
+    # NOTE. Modified output of model
+    forecasts_imgs, gts_imgs, loss_imgs, forecasts_poses, gts_poses, loss_poses = module(batch)
     
     optimizer.zero_grad()
-    loss.backward()
+    loss_imgs.backward()
+    loss_poses.backward()
     optimizer.step()
     scheduler.step()
 
     # update tensorboard
-    summary.add_scalar(tag='loss', scalar_value=loss.mean().item(), global_step=idx)
+    summary.add_scalar(tag='Image loss', scalar_value=loss_imgs.mean().item(), global_step=idx)
+    summary.add_scalar(tag='Pose loss', scalar_value=loss_poses.mean().item(), global_step=idx)
     
     if get_rank() == 0:
-        pbar.set_description((f"loss: {loss:.4f};"))
+        pbar.set_description((f"loss_imgs: {loss_imgs:.4f} | loss_poses: {loss_poses.item():.4f}; "))
 
         if idx % args.ckpt_iter == 0:
             torch.save(module.state_dict(), os.path.join(save_dir, "last.ckpt"))
@@ -230,7 +233,7 @@ for idx in pbar:
             recon_clip = [predict_1]
             with torch.no_grad():
                 for i in range(time_len - 1):
-                    predict = gts[i][0]
+                    predict = gts_imgs[i][0]
                     predict = module.decode_to_img(predict, [1, 256, 16,16])
                     recon_clip.append(predict)
 
@@ -243,7 +246,7 @@ for idx in pbar:
             
             with torch.no_grad():
                 for i in range(time_len - 1):
-                    predict = torch.argmax(forecasts[i], 2)[0]
+                    predict = torch.argmax(forecasts_imgs[i], 2)[0]
                     predict = module.decode_to_img(predict, [1, 256, 16,16])
                     pred_clip.append(predict)
 
