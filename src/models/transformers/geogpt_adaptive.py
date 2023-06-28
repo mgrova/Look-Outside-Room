@@ -374,12 +374,10 @@ class GeoTransformer(nn.Module):
         logits_array  = torch.cat(logits, 0)
         logits_final  = logits_array.reshape(-1, logits_array.size(-1))
         
-        gts_array = torch.cat(targets, 0)
-        gts_finals = gts_array.reshape(-1)
+        targets_array = torch.cat(targets, 0)
+        targets_finals = targets_array.reshape(-1)
 
-        # print("image_logits shape: {}".format(logits_final.shape))
-
-        loss = F.cross_entropy(logits_final, gts_finals)
+        loss = F.cross_entropy(logits_final, targets_finals)
         return loss
     
     def compute_pose_loss(self, predictions, gts):

@@ -203,6 +203,8 @@ for idx in pbar:
     for key in batch.keys():
         batch[key] = batch[key].cuda()
     
+    # summary.add_graph(module, input_to_model=batch)
+    
     # NOTE. Modified output of model
     forecasts_imgs, gts_imgs, loss_imgs, forecasts_poses, gts_poses, loss_poses = module(batch)
     
@@ -228,6 +230,8 @@ for idx in pbar:
             gt_clip = vutils.make_grid(gt_clip)
             gt_clip = (gt_clip + 1)/2
 
+            summary.add_image('GT', gt_clip.cpu(), global_step=idx)
+
             # recon
             predict_1 = batch["rgbs"][0:1, :, 0].cuda()
             recon_clip = [predict_1]
@@ -239,6 +243,8 @@ for idx in pbar:
 
             recon_clip = vutils.make_grid(torch.cat(recon_clip, 0))
             recon_clip = (recon_clip + 1)/2
+
+            summary.add_image('Reconstruction', recon_clip.cpu(), global_step=idx)
 
             # predict
             predict_1 = batch["rgbs"][0:1, :, 0].cuda()
@@ -252,6 +258,8 @@ for idx in pbar:
 
             pred_clip = vutils.make_grid(torch.cat(pred_clip, 0))
             pred_clip = (pred_clip + 1)/2
+
+            summary.add_image('Prediction', pred_clip.cpu(), global_step=idx)
 
             merge = torch.cat([gt_clip.cpu(), recon_clip.cpu(), pred_clip.cpu()], 1).clamp(0,1)
             plt.imsave(os.path.join(visual_dir, "%06d.png" % idx), merge.permute(1,2,0).numpy())
