@@ -216,11 +216,12 @@ class GeoTransformer(nn.Module):
         for k in range(steps):
             callback(k)
             x_cond = x            
-            logits, _ = self.transformer.test(c, x_cond, p, embeddings=embeddings)
-            logits = logits[:, -1, :] / temperature
+            image_logits, pose_logits, _ = self.transformer.test(c, x_cond, p, embeddings=embeddings)
+
+            image_logits = image_logits[:, -1, :] / temperature
             if top_k is not None:
-                logits = self.top_k_logits(logits, top_k)
-            probs = F.softmax(logits, dim=-1)
+                image_logits = self.top_k_logits(image_logits, top_k)
+            probs = F.softmax(image_logits, dim=-1)
             
             if sample:
                 ix = torch.multinomial(probs, num_samples=1)

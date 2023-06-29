@@ -259,7 +259,7 @@ class GPT(nn.Module):
 
         # Converts first head output to shape of prototype (image t,image t+1,T_t->t+1)
         logits_img = self.head_images(x)
-        image_pred = logits_img[:, dc_emb.shape[1]-1:]
+        image_pred = logits_img #[:, dc_emb.shape[1]-1:]
         
         # Convert inputs to pose shape 
         poses_pred = self.head_poses(x)
@@ -301,17 +301,18 @@ class GPT(nn.Module):
             x = block(x, h)
             
         x = self.ln_f(x)
-        logits = self.head_images(x)
 
-        # if we are given some desired targets also calculate the loss
-        loss = None
-        if targets is not None:
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+        # Converts first head output to shape of prototype (image t,image t+1,T_t->t+1)
+        logits_img = self.head_images(x)
+        image_pred = logits_img #[:, dc_emb.shape[1]-1:]
+        
+        # Convert inputs to pose shape 
+        poses_pred = self.head_poses(x)
         
         if return_bias:
-            return logits, h
+            return image_pred, poses_pred, h
         else:
-            return logits, loss
+            return image_pred, poses_pred, None
 
 class DummyGPT(nn.Module):
     # for debugging

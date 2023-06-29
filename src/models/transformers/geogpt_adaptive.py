@@ -232,6 +232,7 @@ class GeoTransformer(nn.Module):
         p.append(self.encode_to_p(example))
         
         images_pred, poses_pred, _ = self.transformer.iter_forward(prototype, z_emb, p = p)
+        images_pred = images_pred[:, prototype.shape[1]-1:]
         
         forecasts_imgs = []
         for t in range(0, time_len-2):
@@ -275,14 +276,14 @@ class GeoTransformer(nn.Module):
             x_cond = x
             
             if bias is None:
-                logits, bias = self.transformer.test(c, x_cond, p, embeddings=embeddings, return_bias=True)
+                image_logits, pose_logits, bias = self.transformer.test(c, x_cond, p, embeddings=embeddings, return_bias=True)
             else:
-                logits, _ = self.transformer.test(c, x_cond, p, embeddings=embeddings)
+                image_logits, pose_logits, _ = self.transformer.test(c, x_cond, p, embeddings=embeddings)
                 
-            logits = logits[:, -1, :] / temperature
+            image_logits = image_logits[:, -1, :] / temperature
             if top_k is not None:
-                logits = self.top_k_logits(logits, top_k)
-            probs = F.softmax(logits, dim=-1)
+                image_logits = self.top_k_logits(image_logits, top_k)
+            probs = F.softmax(image_logits, dim=-1)
             
             if sample:
                 ix = torch.multinomial(probs, num_samples=1)
@@ -291,7 +292,7 @@ class GeoTransformer(nn.Module):
                 
             x = torch.cat((x, ix), dim=1)   
 
-        return x, bias
+        return x, pose_logits, bias
     
     @torch.no_grad()
     def sample_latent(self, x, c, p, steps, temperature=1.0, sample=False, top_k=None,
@@ -307,21 +308,23 @@ class GeoTransformer(nn.Module):
         
         for k in range(steps):
             callback(k)
-            x_cond = x            
-            logits, _ = self.transformer.test(c, x_cond, p, embeddings=embeddings)
-            logits = logits[:, -1, :] / temperature
+            x_cond = x
+            image_logits, pose_logits, _ = self.transformer.test(c, x_cond, p, embeddings=embeddings)
+            
+            # Process image logits
+            image_logits = image_logits[:, -1, :] / temperature
             if top_k is not None:
-                logits = self.top_k_logits(logits, top_k)
-            probs = F.softmax(logits, dim=-1)
+                image_logits = self.top_k_logits(image_logits, top_k)
+            probs = F.softmax(image_logits, dim=-1)
             
             if sample:
                 ix = torch.multinomial(probs, num_samples=1)
             else:
                 _, ix = torch.topk(probs, k=1, dim=-1)
                 
-            x = torch.cat((x, ix), dim=1)   
+            x = torch.cat((x, ix), dim=1)
 
-        return x
+        return x, pose_logits
     
     @torch.no_grad()
     def sample(self, x, c, steps, temperature=1.0, sample=False, top_k=None,
@@ -361,6 +364,14 @@ class GeoTransformer(nn.Module):
         x = x[:, c.shape[1]:]
         return x
 
+    def decode_to_pose(self, pred):
+        pred_batch = self.decode_from_p(pred)
+        q   = rotmat2qvec(pred_batch["R_rel"].numpy())
+        pos = pred_batch["t_rel"][0:3].numpy().flat
+        est_pose = [pos[0], pos[1], pos[2], 
+                    q[0], q[1], q[2], q[3]]
+        
+        return est_pose
 
     @torch.no_grad()
     def decode_to_img(self, index, zshape):
@@ -384,12 +395,7 @@ class GeoTransformer(nn.Module):
         # Convert predictions to Nx7 tensor
         est_poses = []
         for pred in predictions:
-            pred_batch = self.decode_from_p(pred.detach().cpu())
-            q   = rotmat2qvec(pred_batch["R_rel"].numpy())
-            pos = pred_batch["t_rel"][0:3].numpy().flat
-            est_pose = [pos[0], pos[1], pos[2], 
-                        q[0], q[1], q[2], q[3]]
-            est_poses.append(est_pose)
+            est_poses.append(self.decode_to_pose(pred.detach().cpu()))
 
         est_poses = torch.tensor(est_poses).to("cuda")
 
