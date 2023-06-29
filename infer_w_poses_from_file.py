@@ -154,7 +154,7 @@ def evaluate_per_batch(temp_model, start_image, K, poses, total_time_len, show=F
         z_start_indices = c_indices[:, :0]
 
         start = time.time()
-        index_sample = temp_model.sample_latent(z_start_indices, prototype, [p1, None, None],
+        index_sample, pose_pred = temp_model.sample_latent(z_start_indices, prototype, [p1, None, None],
                                                 steps=c_indices.shape[1],
                                                 temperature=1.0,
                                                 sample=False,
@@ -233,7 +233,7 @@ def evaluate_per_batch(temp_model, start_image, K, poses, total_time_len, show=F
 
                 z_start_indices = c_indices[:, :0]
                 start = time.time()
-                index_sample = temp_model.sample_latent(z_start_indices, prototype, [p1, p2, p3],
+                index_sample, pose_pred = temp_model.sample_latent(z_start_indices, prototype, [p1, p2, p3],
                                                         steps=c_indices.shape[1],
                                                         temperature=1.0,
                                                         sample=False,

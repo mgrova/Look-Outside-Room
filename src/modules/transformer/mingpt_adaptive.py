@@ -188,11 +188,16 @@ class GPT(nn.Module):
 
         # decoder head
         self.ln_f = nn.LayerNorm(config.n_embd)
-        self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+
+        # TODO. Create one head per task to solve. The size must be smaller from the original one
+        # self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        self.head_poses  = nn.Linear(config.n_embd, 1, bias=False)
+        self.head_images = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        
         self.block_size = config.block_size
         self.apply(self._init_weights)
         self.config = config
-        logger.info("number of parameters: %e", sum(p.numel() for p in self.parameters()))
+        print("number of parameters: {}".format(sum(p.numel() for p in self.parameters())))
 
     def get_block_size(self):
         return self.block_size
@@ -248,16 +253,19 @@ class GPT(nn.Module):
         for block in self.blocks:
             x = block(x, h)
         
-        # x = self.blocks(x)
         x = self.ln_f(x)
-        logits = self.head(x)
+        # TODO. Instead of have only one head and return the outputs, our idea is have one head per task.
+        #       And return the pred_images and the pred_poses and ... (if we need more heads)
 
-        # if we are given some desired targets also calculate the loss
-        loss = None
-        if targets is not None:
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
-            
-        return logits, loss
+        # Converts first head output to shape of prototype (image t,image t+1,T_t->t+1)
+        logits_img = self.head_images(x)
+        image_pred = logits_img #[:, dc_emb.shape[1]-1:]
+        
+        # Convert inputs to pose shape 
+        poses_pred = self.head_poses(x)
+
+        # return logits, loss
+        return image_pred, poses_pred, None
     
     def test(self, dc_emb, z_indices, p, embeddings=None, targets=None, return_layers=False, return_bias=False):
         token_embeddings_dc = dc_emb
@@ -293,17 +301,18 @@ class GPT(nn.Module):
             x = block(x, h)
             
         x = self.ln_f(x)
-        logits = self.head(x)
 
-        # if we are given some desired targets also calculate the loss
-        loss = None
-        if targets is not None:
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
+        # Converts first head output to shape of prototype (image t,image t+1,T_t->t+1)
+        logits_img = self.head_images(x)
+        image_pred = logits_img #[:, dc_emb.shape[1]-1:]
+        
+        # Convert inputs to pose shape 
+        poses_pred = self.head_poses(x)
         
         if return_bias:
-            return logits, h
+            return image_pred, poses_pred, h
         else:
-            return logits, loss
+            return image_pred, poses_pred, None
 
 class DummyGPT(nn.Module):
     # for debugging
