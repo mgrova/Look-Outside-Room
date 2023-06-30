@@ -191,8 +191,8 @@ class GPT(nn.Module):
 
         # TODO. Create one head per task to solve. The size must be smaller from the original one
         # self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-        self.head_poses  = nn.Linear(config.n_embd, 1, bias=False)
         self.head_images = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        self.head_poses  = nn.Linear(config.n_embd, 1, bias=False)
         
         self.block_size = config.block_size
         self.apply(self._init_weights)
@@ -258,8 +258,7 @@ class GPT(nn.Module):
         #       And return the pred_images and the pred_poses and ... (if we need more heads)
 
         # Converts first head output to shape of prototype (image t,image t+1,T_t->t+1)
-        logits_img = self.head_images(x)
-        image_pred = logits_img #[:, dc_emb.shape[1]-1:]
+        image_pred = self.head_images(x)
         
         # Convert inputs to pose shape 
         poses_pred = self.head_poses(x)

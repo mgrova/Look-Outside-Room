@@ -215,7 +215,7 @@ class GeoTransformer(nn.Module):
         # TODO. Make sense use this GT? We are prediction image 1 and 2, so we want to 
         # learn relative transformation between each t image
         gts_poses.append([batch["R_01"].cpu().numpy(), batch["t_01"].cpu().numpy()])
-        gts_poses.append([batch["R_12"].cpu().numpy(), batch["t_12"].cpu().numpy()])
+        gts_poses.append([batch["R_02"].cpu().numpy(), batch["t_02"].cpu().numpy()])
 
         _, c_indices = self.encode_to_c(batch["rgbs"][:, :, time_len-1, ...]) # final frame
         c_emb = self.transformer.tok_emb(c_indices)
