@@ -173,6 +173,10 @@ class GPT(nn.Module):
         self.time_len = time_len
         self.frame_emb = nn.Parameter(torch.zeros(1, 256, config.n_embd))
         self.camera_emb = nn.Parameter(torch.zeros(1, 30, config.n_embd))
+
+        # self.shot_type_emb = nn.Parameter(torch.zeros(1, 1, config.n_embd))
+        # self.velocity_emb  = nn.Parameter(torch.zeros(1, 1, config.n_embd))
+        
         self.role_emb = None
         
         self.time_emb = nn.Parameter(data=get_sinusoid_encoding(n_position=block_size, d_hid=config.n_embd), requires_grad=False)
@@ -232,6 +236,10 @@ class GPT(nn.Module):
             role_emb.append(self.camera_emb)
 
         role_emb.append(self.frame_emb)
+        
+        # role_emb.append(self.shot_type_emb)
+        # role_emb.append(self.velocity_emb)
+
         role_emb = torch.cat(role_emb, 1)
         
         role_embeddings = role_emb[:, :t, :] # each position maps to a (learnable) vector

@@ -224,7 +224,9 @@ class VideoDataset(torch.utils.data.Dataset):
             "R_02": R_02.astype(np.float32),
             "t_02": t_02.astype(np.float32),
             "R_12": R_12.astype(np.float32),
-            "t_12": t_12.astype(np.float32)
+            "t_12": t_12.astype(np.float32),
+            "velocity": 100,
+            "shot_type": 0
         }
 
         return example

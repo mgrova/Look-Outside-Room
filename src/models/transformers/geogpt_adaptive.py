@@ -184,7 +184,7 @@ class GeoTransformer(nn.Module):
         example = dict()
         example["K"] = batch["K"]
         example["K_inv"] = batch["K_inv"]
-        
+
         conditions = [] # list of [camera, frame] 
         gts_imgs   = [] # gt imgs  | except the first img
         gts_poses  = [] # gt poses | except the first pose
@@ -216,6 +216,9 @@ class GeoTransformer(nn.Module):
         # learn relative transformation between each t image
         gts_poses.append([batch["R_01"].cpu().numpy(), batch["t_01"].cpu().numpy()])
         gts_poses.append([batch["R_02"].cpu().numpy(), batch["t_02"].cpu().numpy()])
+
+        # example["shot_type"] = batch["shot_type"]
+        # example["velocity"]  = batch["velocity"]
 
         _, c_indices = self.encode_to_c(batch["rgbs"][:, :, time_len-1, ...]) # final frame
         c_emb = self.transformer.tok_emb(c_indices)

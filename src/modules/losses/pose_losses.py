@@ -21,8 +21,8 @@ class CameraPoseLoss(nn.Module):
         # self.s_q = torch.nn.Parameter(torch.Tensor([config.get("s_q")]), requires_grad=self.learnable)
         # self.norm = config.get("norm")
         self.learnable = True
-        self.s_x = torch.nn.Parameter(torch.Tensor([-1.0]), requires_grad=self.learnable)
-        self.s_q = torch.nn.Parameter(torch.Tensor([0.0]), requires_grad=self.learnable)
+        self.s_x = torch.nn.Parameter(torch.Tensor([1.0]), requires_grad=self.learnable)
+        self.s_q = torch.nn.Parameter(torch.Tensor([1.0]), requires_grad=self.learnable)
         self.norm = 2.0
 
     def forward(self, est_pose, gt_pose):

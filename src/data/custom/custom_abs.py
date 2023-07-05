@@ -193,7 +193,9 @@ class VideoDataset(torch.utils.data.Dataset):
             "K": K.astype(np.float32),
             "K_inv": K_inv.astype(np.float32),
             "R_s": np.stack(R_s).astype(np.float32),
-            "t_s": np.stack(t_s).astype(np.float32)
+            "t_s": np.stack(t_s).astype(np.float32),
+            "velocity": 100,
+            "shot_type": 0
         }
 
         return example
