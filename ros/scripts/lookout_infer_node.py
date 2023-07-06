@@ -4,19 +4,18 @@ import rospy
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseArray
-
 from message_filters import Subscriber, ApproximateTimeSynchronizer
+
 import cv2 as cv
-
 import sys, importlib
-import time
-sys.path.insert(0, ".")
-
 import os
+import time
 import torch
 import numpy as np
 import random
-import tqdm
+
+uppath = lambda _path, n: os.sep.join(_path.split(os.sep)[:-n])
+sys.path.append(uppath(__file__, 3))
 
 from omegaconf import OmegaConf
 from torchvision import transforms
@@ -39,7 +38,7 @@ class LookOutTransformer():
     def __init__(self, node_name):
         rospy.init_node(node_name, anonymous=False)
 
-        base_config     = rospy.get_param('~base_config', default="custom_16x16_sine_cview_adaptive")
+        config_path     = rospy.get_param('~config_path', default="custom_16x16_sine_cview_adaptive")
         exp_name        = rospy.get_param('~exp_name', default="exp_emb16384")
         gpu             = rospy.get_param('~gpu', default="0")
         seed            = rospy.get_param('~seed', default=2333)
@@ -50,7 +49,7 @@ class LookOutTransformer():
         desired_posearray_topic = rospy.get_param('~desired_posearray_topic', default="desired_pose_array")
         inference_image_topic   = rospy.get_param('~inference_image_topic', default="inference_img")
 
-        os.environ["CUDA_VISIBLE_DEVICES"] = gpu
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu)
 
         # TODO: Read from camera_info
         K = np.array([[128.0, 0.0, 127.0],
@@ -75,7 +74,7 @@ class LookOutTransformer():
         if checkpoint == "":
             checkpoint = "./experiments/custom/{}/model/last.ckpt".format(exp_name)
         self.model = None
-        self.__setup_model(base_config, checkpoint)
+        self.__setup_model(config_path, checkpoint)
         rospy.loginfo("Succesfully loaded model")
 
         # Setup publishers and subscribers
@@ -128,8 +127,7 @@ class LookOutTransformer():
 
         return poses_mat_tensor
 
-    def __setup_model(self, config, checkpoint):
-        config_path = "./configs/custom/{}.yaml".format(config)
+    def __setup_model(self, config_path, checkpoint):
         config = OmegaConf.load(config_path)
         self.model = instantiate_from_config(config.model)
         self.model.cuda()

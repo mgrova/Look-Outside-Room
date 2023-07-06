@@ -1,6 +1,6 @@
 <launch>
 
-  <arg name="base_config"             default="custom_16x16_sine_cview_adaptive" />
+  <arg name="config_path"             default="/home/aiiacvmllab/Projects/lookout_ws/src/Look-Outside-Room/configs/custom/custom_16x16_sine_cview_adaptive_abs.yaml" />
   <arg name="exp_name"                default="exp_emb16384" />
   <arg name="gpu"                     default="0" />
   <arg name="seed"                    default="2333" />
@@ -23,7 +23,7 @@
 
   <!-- LookOut model inference node -->
   <node pkg="lookout_transformer" name="lookout_infer_node"  type="lookout_infer_node.py" output="screen" >
-    <param name="base_config"             value="$(arg base_config)" />
+    <param name="config_path"             value="$(arg config_path)" />
     <param name="exp_name"                value="$(arg exp_name)" />
     <param name="gpu"                     value="$(arg gpu)" />
     <param name="seed"                    value="$(arg seed)" />
