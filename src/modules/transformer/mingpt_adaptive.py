@@ -192,7 +192,7 @@ class GPT(nn.Module):
         # TODO. Create one head per task to solve. The size must be smaller from the original one
         # self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         self.head_images = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-        self.head_poses  = nn.Linear(config.n_embd, 1, bias=False)
+        self.head_poses  = nn.Linear(config.n_embd, 1, bias=True)
         
         self.block_size = config.block_size
         self.apply(self._init_weights)
@@ -261,7 +261,18 @@ class GPT(nn.Module):
         image_pred = self.head_images(x)
         
         # Convert inputs to pose shape 
+        # TODO. Make model learn relative poses
+        # previous_poses = z_indices
+        # poses_pred = previous_poses + self.head_poses(x)
         poses_pred = self.head_poses(x)
+
+        print(f"x shape: {x.shape}")
+        print(f"dc_emb shape: {dc_emb.shape}")
+        print(f"z_emb shape: {z_emb.shape}")
+        print(f"poses_pred shape: {poses_pred.shape}")
+        print(f"p1 shape: {p1.shape}")
+        print(f"p2 shape: {p2.shape}")
+
 
         # return logits, loss
         return image_pred, poses_pred, None
@@ -306,7 +317,10 @@ class GPT(nn.Module):
         image_pred = logits_img #[:, dc_emb.shape[1]-1:]
         
         # Convert inputs to pose shape 
-        poses_pred = self.head_poses(x)
+
+        # TODO. Make model learn relative poses
+        previous_poses = z_indices
+        poses_pred = previous_poses + self.head_poses(x)
         
         if return_bias:
             return image_pred, poses_pred, h

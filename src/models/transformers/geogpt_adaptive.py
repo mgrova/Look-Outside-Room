@@ -190,8 +190,12 @@ class GeoTransformer(nn.Module):
         gts_poses  = [] # gt poses | except the first pose
         p = []
 
+        prev_pose_array = []
         for t in range(0, time_len-1): 
             _, c_indices = self.encode_to_c(batch["rgbs"][:, :, t, ...])
+
+            print(f"img shape: {batch['rgbs'][:, :, t, ...].shape}")
+
             c_emb = self.transformer.tok_emb(c_indices)
             conditions.append(c_emb)
             
@@ -199,6 +203,7 @@ class GeoTransformer(nn.Module):
                 example["R_rel"] = batch["R_01"]
                 example["t_rel"] = batch["t_01"]
                 embeddings_warp = self.encode_to_e(example)
+                
                 p.append(self.encode_to_p(example))
                 conditions.append(embeddings_warp)
                 
@@ -206,6 +211,15 @@ class GeoTransformer(nn.Module):
                 example["R_rel"] = batch["R_02"]
                 example["t_rel"] = batch["t_02"]
                 embeddings_warp = self.encode_to_e(example)
+
+                # inputs = []
+                # for k in ["R_rel", "t_rel", "K", "K_inv"]:
+                #     entry = example[k].reshape(example[k].shape[0], -1, self.n_channels)
+                #     inputs.append(entry)
+                    
+                # x = torch.cat(inputs, dim=1)
+                # prev_pose_array.append(x)
+
                 p.append(self.encode_to_p(example))
                 conditions.append(embeddings_warp)
 
@@ -218,21 +232,34 @@ class GeoTransformer(nn.Module):
         gts_poses.append([batch["R_02"].cpu().numpy(), batch["t_02"].cpu().numpy()])
 
         _, c_indices = self.encode_to_c(batch["rgbs"][:, :, time_len-1, ...]) # final frame
+        
+        print(f"c_indices shape: {c_indices.shape}")
+
         c_emb = self.transformer.tok_emb(c_indices)
+        print(f"c_emb shape: {c_emb.shape}")
+        print("")
+
         conditions.append(c_emb)
         gts_imgs.append(c_indices)
         
+        for cond in conditions:
+            print(f"conditions before cat shape: {cond.shape}")
+
         conditions = torch.cat(conditions, 1) # B, L, 1024
         prototype = conditions[:, 0:286, :]
         z_emb = conditions[:, 286::, :]
         
+        print(f"conditions after cat shape: {conditions.shape}")
+
         # p3 
         example["R_rel"] = batch["R_12"]
         example["t_rel"] = batch["t_12"]
         p.append(self.encode_to_p(example))
         
+
         images_pred, poses_pred, _ = self.transformer.iter_forward(prototype, z_emb, p = p)
         images_pred = images_pred[:, prototype.shape[1]-1:]
+        print("")
         
         forecasts_imgs = []
         for t in range(0, time_len-2):
