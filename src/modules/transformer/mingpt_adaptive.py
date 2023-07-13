@@ -192,7 +192,7 @@ class GPT(nn.Module):
         # TODO. Create one head per task to solve. The size must be smaller from the original one
         # self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         self.head_images = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-        self.head_poses  = nn.Linear(config.n_embd, 1, bias=False)
+        self.head_poses  = nn.Linear(config.n_embd, 1, bias=True)
         
         self.block_size = config.block_size
         self.apply(self._init_weights)
