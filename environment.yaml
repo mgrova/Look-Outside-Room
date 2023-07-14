@@ -14,3 +14,4 @@ dependencies:
   - torchvision=0.8.2
   - numpy=1.19.2
   - prettytable
+  - absl-py

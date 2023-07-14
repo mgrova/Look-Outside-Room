@@ -147,7 +147,7 @@ def evaluate_per_batch(temp_model, batch, total_time_len = 20, time_len = 1, sho
 
         prototype = torch.cat(conditions, 1)
         z_start_indices = c_indices[:, :0]
-        index_sample = temp_model.sample_latent(z_start_indices, prototype, [p1, None, None],
+        index_sample, _ = temp_model.sample_latent(z_start_indices, prototype, [p1, None, None],
                                        steps=c_indices.shape[1],
                                        temperature=1.0,
                                        sample=False,
@@ -223,7 +223,7 @@ def evaluate_per_batch(temp_model, batch, total_time_len = 20, time_len = 1, sho
                 prototype = torch.cat(conditions, 1)
 
                 z_start_indices = c_indices[:, :0]
-                index_sample = temp_model.sample_latent(z_start_indices, prototype, [p1, p2, p3],
+                index_sample, _ = temp_model.sample_latent(z_start_indices, prototype, [p1, p2, p3],
                                                steps=c_indices.shape[1],
                                                temperature=1.0,
                                                sample=False,

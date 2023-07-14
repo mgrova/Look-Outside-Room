@@ -1,0 +1,5 @@
+
+python ./evaluation/evaluate_custom.py --len 6 --video_limit 10 --base custom_16x16_sine_cview_adaptive --exp exp_multitask_refinery --data_path /home/aiiacvmllab/Documents/datasets/LookOut_UE4 --ckpt_path experiments/custom/exp_multitask_refinery/model/last.ckpt --gap 5 ; \
+python ./evaluation/evaluate_custom.py --len 6 --video_limit 10 --base custom_16x16_sine_cview_adaptive --exp exp_multitask_refinery --data_path /home/aiiacvmllab/Documents/datasets/LookOut_UE4 --ckpt_path experiments/custom/exp_multitask_refinery/model/last.ckpt --gap 15 ; \
+python ./evaluation/evaluate_custom.py --len 6 --video_limit 10 --base custom_16x16_sine_cview_adaptive --exp exp_multitask_refinery --data_path /home/aiiacvmllab/Documents/datasets/LookOut_UE4 --ckpt_path experiments/custom/exp_multitask_refinery/model/last.ckpt --gap 25 ; \
+python ./evaluation/evaluate_custom.py --len 6 --video_limit 10 --base custom_16x16_sine_cview_adaptive --exp exp_multitask_refinery --data_path /home/aiiacvmllab/Documents/datasets/LookOut_UE4 --ckpt_path experiments/custom/exp_multitask_refinery/model/last.ckpt --gap 35 ;
