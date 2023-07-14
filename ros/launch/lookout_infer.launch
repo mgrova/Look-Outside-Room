@@ -1,17 +1,17 @@
 <launch>
 
-  <arg name="config_path"             default="/home/aiiacvmllab/Projects/lookout_ws/src/Look-Outside-Room/configs/custom/custom_16x16_sine_cview_adaptive_abs.yaml" />
+  <arg name="config_path"             default="/home/aiiacvmllab/Project/lookout_ws/src/Look-Outside-Room/configs/custom/custom_16x16_sine_cview_adaptive.yaml" />
   <arg name="exp_name"                default="exp_emb16384" />
   <arg name="gpu"                     default="0" />
   <arg name="seed"                    default="2333" />
-  <arg name="checkpoint"              default="/home/aiiacvmllab/Projects/nvs_repos/Look-Outside-Room/experiments/custom/exp_emb16384/model/last.ckpt" />
+  <arg name="checkpoint"              default="/home/aiiacvmllab/Project/lookout_ws/src/Look-Outside-Room/experiments/custom/exp_multitask_piramids/model/last.ckpt" />
   <arg name="prediction_len"          default="4" />
   <arg name="start_image_topic"       default="start_image" />
   <arg name="desired_posearray_topic" default="desired_pose_array" />
   <arg name="inference_image_topic"   default="inference_img" />
 
-  <arg name="start_image_path"   default="/home/aiiacvmllab/Documents/datasets/LookOut_UE4/test/dataset_2023-06-19_12:21:19/rgb/rgb_0000.png" />
-  <arg name="desired_poses_path" default="/home/aiiacvmllab/Documents/datasets/LookOut_UE4/test/dataset_2023-06-19_12:21:19/poses.txt" />
+  <arg name="start_image_path"   default="/home/aiiacvmllab/Downloads/LookOut_Pyramids_UE4/test/dataset_2023-07-07_16:39:10/rgb/rgb_0000.png" />
+  <arg name="desired_poses_path" default="/home/aiiacvmllab/Downloads/LookOut_Pyramids_UE4/test/dataset_2023-07-07_16:39:10/poses.txt" />
   <arg name="poses_to_publish"   default="10" />
 
   <!-- Node to publish start image and desired poses into syncronized ROS messages from files -->

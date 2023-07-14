@@ -203,7 +203,7 @@ class LookOutTransformer():
             z_start_indices = c_indices[:, :0]
 
             start = time.time()
-            index_sample = self.model.sample_latent(z_start_indices, prototype, [p1, None, None],
+            index_sample, _ = self.model.sample_latent(z_start_indices, prototype, [p1, None, None],
                                                     steps=c_indices.shape[1],
                                                     temperature=1.0,
                                                     sample=False,
@@ -280,7 +280,7 @@ class LookOutTransformer():
 
                     z_start_indices = c_indices[:, :0]
                     start = time.time()
-                    index_sample = self.model.sample_latent(z_start_indices, prototype, [p1, p2, p3],
+                    index_sample, _ = self.model.sample_latent(z_start_indices, prototype, [p1, p2, p3],
                                                             steps=c_indices.shape[1],
                                                             temperature=1.0,
                                                             sample=False,

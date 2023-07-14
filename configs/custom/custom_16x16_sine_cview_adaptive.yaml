@@ -42,7 +42,7 @@ model:
     first_stage_config:
       target: src.models.vqgan.VQModel
       params:
-        ckpt_path: "pretrained_models/custom_first_stage/last.ckpt"
+        ckpt_path: "/home/aiiacvmllab/Project/lookout_ws/src/Look-Outside-Room/pretrained_models/custom_first_stage_pyramids/last.ckpt"
         embed_dim: 256
         n_embed: 16384
         ddconfig:
